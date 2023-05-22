@@ -4,7 +4,7 @@ use std::{env, sync::Arc, time};
 use dotenv::dotenv;
 use ethers::{prelude::*, types::transaction::eip2718::TypedTransaction};
 use eyre::Result;
-use metrics::gauge;
+use metrics::{counter, gauge, increment_counter};
 use metrics_exporter_prometheus::PrometheusBuilder;
 use tokio::task::JoinHandle;
 use tokio::time::Duration;
@@ -81,21 +81,27 @@ async fn main() -> Result<()> {
             .await
             .unwrap()
             .as_u64();
-        gauge!("tx.gas.estimate", gas_estimation as f64);
+        gauge!("watchdog.tx.gas.estimate", gas_estimation as f64);
 
-        gauge!("tx.latency.estimate_gas", estimate_gas_start.elapsed());
+        gauge!(
+            "watchdog.tx.latency.estimate_gas",
+            estimate_gas_start.elapsed()
+        );
 
         // Send the transaction
         let tx_submit_start = time::Instant::now();
         let pending_start = time::Instant::now();
         let pending_tx = match signer.send_transaction(tx, None).await {
             Ok(pending_tx) => {
-                gauge!("tx.latency.mempool", pending_start.elapsed());
+                gauge!("watchdog.tx.latency.mempool", pending_start.elapsed());
                 pending_tx
             }
             Err(err) => {
                 eprintln!("failed to send transaction: {:?}", err);
-                gauge!("tx.status", 0.0);
+                gauge!("watchdog.tx.status", 0.0);
+
+                increment_counter!("watchdog.run.success");
+
                 tokio::time::sleep(Duration::from_secs(TX_PERIOD)).await;
                 continue;
             }
@@ -105,11 +111,13 @@ async fn main() -> Result<()> {
         let submit_start = time::Instant::now();
         let receipt = match pending_tx.confirmations(1).await {
             Ok(receipt) => {
-                gauge!("tx.latency.submission", submit_start.elapsed());
+                gauge!("watchdog.tx.latency.submission", submit_start.elapsed());
                 receipt.unwrap()
             }
             Err(err) => {
                 eprintln!("failed to get transaction receipt: {:?}", err);
+
+                increment_counter!("watchdog.run.success");
 
                 // TODO(tmrtx): retry backoff
                 tokio::time::sleep(Duration::from_secs(TX_PERIOD)).await;
@@ -117,13 +125,14 @@ async fn main() -> Result<()> {
             }
         };
 
-        gauge!("tx.latency.full", tx_submit_start.elapsed());
+        gauge!("watchdog.tx.latency.full", tx_submit_start.elapsed());
 
         let gas_used = receipt.gas_used.unwrap().as_u64() as f64;
-        gauge!("tx.gas.used", gas_used);
+        gauge!("watchdog.tx.gas.used", gas_used);
         let status = receipt.status.unwrap().as_u64() as f64;
-        gauge!("tx.status", status);
+        gauge!("watchdog.tx.status", status);
 
+        increment_counter!("watchdog.run.success");
         // Wait for 10 minutes before the next iteration
         tokio::time::sleep(Duration::from_secs(TX_PERIOD)).await;
     }
