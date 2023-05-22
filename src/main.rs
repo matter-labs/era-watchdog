@@ -100,7 +100,7 @@ async fn main() -> Result<()> {
                 eprintln!("failed to send transaction: {:?}", err);
                 gauge!("watchdog.tx.status", 0.0);
 
-                increment_counter!("watchdog.run.success");
+                increment_counter!("watchdog.liveness");
 
                 tokio::time::sleep(Duration::from_secs(TX_PERIOD)).await;
                 continue;
@@ -117,7 +117,7 @@ async fn main() -> Result<()> {
             Err(err) => {
                 eprintln!("failed to get transaction receipt: {:?}", err);
 
-                increment_counter!("watchdog.run.success");
+                increment_counter!("watchdog.liveness");
 
                 // TODO(tmrtx): retry backoff
                 tokio::time::sleep(Duration::from_secs(TX_PERIOD)).await;
@@ -132,7 +132,7 @@ async fn main() -> Result<()> {
         let status = receipt.status.unwrap().as_u64() as f64;
         gauge!("watchdog.tx.status", status);
 
-        increment_counter!("watchdog.run.success");
+        increment_counter!("watchdog.liveness");
         // Wait for 10 minutes before the next iteration
         tokio::time::sleep(Duration::from_secs(TX_PERIOD)).await;
     }
