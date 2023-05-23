@@ -2,8 +2,7 @@ name: Build and publish era-watchdog image
 
 on:
   push:
-    branches:
-      - "main"
+    branches: ["main", "develop"]
     tags:
       - "*"
 
