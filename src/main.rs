@@ -19,7 +19,7 @@ pub fn run_prometheus_exporter() -> JoinHandle<()> {
         .build()
         .expect("failed to install Prometheus recorder");
 
-    metrics::set_boxed_recorder(Box::new(recorder)).expect("failed to set metrics recorder");
+    metrics::set_boxed_recorder(Box::new(recorder)).expect("failed to set the metrics recorder");
 
     tokio::spawn(async move {
         tokio::pin!(exporter);
@@ -133,7 +133,7 @@ async fn main() -> Result<()> {
         gauge!("watchdog.tx.status", status);
 
         increment_counter!("watchdog.liveness");
-        // Wait for 10 minutes before the next iteration
+        // Wait for before the next iteration
         tokio::time::sleep(Duration::from_secs(TX_PERIOD)).await;
     }
 }
