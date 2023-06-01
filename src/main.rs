@@ -4,7 +4,7 @@ use std::{env, sync::Arc, time};
 use dotenv::dotenv;
 use ethers::{prelude::*, types::transaction::eip2718::TypedTransaction};
 use eyre::Result;
-use metrics::{counter, gauge, increment_counter};
+use metrics::{gauge, increment_counter};
 use metrics_exporter_prometheus::PrometheusBuilder;
 use tokio::task::JoinHandle;
 use tokio::time::Duration;
@@ -81,19 +81,20 @@ async fn main() -> Result<()> {
             .await
             .unwrap()
             .as_u64();
-        gauge!("watchdog.tx.gas.estimate", gas_estimation as f64);
+        gauge!("watchdog.tx.gas", gas_estimation as f64, "type" => "gas_estimate");
 
         gauge!(
-            "watchdog.tx.latency.estimate_gas",
-            estimate_gas_start.elapsed()
+            "watchdog.tx.latency",
+            estimate_gas_start.elapsed(),
+            "stage" => "estimate_gas",
         );
 
         // Send the transaction
         let tx_submit_start = time::Instant::now();
-        let pending_start = time::Instant::now();
+        let send_transaction_start = time::Instant::now();
         let pending_tx = match signer.send_transaction(tx, None).await {
             Ok(pending_tx) => {
-                gauge!("watchdog.tx.latency.mempool", pending_start.elapsed());
+                gauge!("watchdog.tx.latency", send_transaction_start.elapsed(), "stage" => "send_transaction");
                 pending_tx
             }
             Err(err) => {
@@ -108,10 +109,10 @@ async fn main() -> Result<()> {
         };
 
         // Wait for the transaction to be mined and get the receipt
-        let submit_start = time::Instant::now();
-        let receipt = match pending_tx.confirmations(1).await {
+        let confirmation_start = time::Instant::now();
+        let receipt = match pending_tx.confirmations(0).await {
             Ok(receipt) => {
-                gauge!("watchdog.tx.latency.submission", submit_start.elapsed());
+                gauge!("watchdog.tx.latency", confirmation_start.elapsed(), "stage" => "mempool");
                 receipt.unwrap()
             }
             Err(err) => {
@@ -125,10 +126,10 @@ async fn main() -> Result<()> {
             }
         };
 
-        gauge!("watchdog.tx.latency.full", tx_submit_start.elapsed());
+        gauge!("watchdog.tx.latency.total", tx_submit_start.elapsed());
 
         let gas_used = receipt.gas_used.unwrap().as_u64() as f64;
-        gauge!("watchdog.tx.gas.used", gas_used);
+        gauge!("watchdog.tx.gas", gas_used, "type" => "gas_used");
         let status = receipt.status.unwrap().as_u64() as f64;
         gauge!("watchdog.tx.status", status);
 
