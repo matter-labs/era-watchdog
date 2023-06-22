@@ -6,7 +6,7 @@ COPY . .
 
 RUN cargo build --release
 
-FROM debian:buster-slim
+FROM rust:1.67
 
 COPY --from=builder /app/target/release/caller /usr/bin/watchdog
 
