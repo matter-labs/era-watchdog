@@ -6,10 +6,10 @@ COPY . .
 
 RUN cargo build --release
 
-EXPOSE 8080
-
 FROM debian:buster-slim
 
 COPY --from=builder /app/target/release/caller /usr/bin/watchdog
+
+EXPOSE 8080
 
 ENTRYPOINT "/usr/bin/watchdog"
