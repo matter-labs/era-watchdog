@@ -8,8 +8,8 @@ use metrics::{gauge, increment_counter};
 use metrics_exporter_prometheus::PrometheusBuilder;
 use tokio::task::JoinHandle;
 use tokio::time::Duration;
-use tracing::{info, warn, Level};
-use tracing_subscriber::FmtSubscriber;
+use tracing::{info, warn};
+use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 pub fn run_prometheus_exporter() -> JoinHandle<()> {
     let builder = {
@@ -38,21 +38,10 @@ async fn main() -> Result<()> {
     // Load .env variables
     dotenv().ok();
 
-    let level = match env::var("LOG_LEVEL") {
-        Ok(level) => match level.as_str() {
-            "DEBUG" => Level::DEBUG,
-            "INFO" => Level::INFO,
-            "WARN" => Level::WARN,
-            "ERROR" => Level::ERROR,
-            _ => Level::INFO,
-        },
-        Err(_) => Level::INFO,
-    };
-
-    // Configure the logger
-    let subscriber = FmtSubscriber::builder().with_max_level(level).finish();
-
-    tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
+    tracing_subscriber::registry()
+        .with(fmt::Layer::default())
+        .with(EnvFilter::from_default_env())
+        .init();
 
     // Start the prometheus exporter server
     run_prometheus_exporter();
