@@ -12,3 +12,5 @@ prometheus = "0.13.3"
 metrics-exporter-prometheus = { version = "0.12.1" }
 metrics = "0.21.0"
 dotenv = "0.15.0"
+tracing = "0.1.37"
+tracing-subscriber = { version = "0.3.17", features = ["env-filter"] }

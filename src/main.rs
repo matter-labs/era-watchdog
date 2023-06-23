@@ -8,6 +8,8 @@ use metrics::{gauge, increment_counter};
 use metrics_exporter_prometheus::PrometheusBuilder;
 use tokio::task::JoinHandle;
 use tokio::time::Duration;
+use tracing::{info, warn};
+use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 pub fn run_prometheus_exporter() -> JoinHandle<()> {
     let builder = {
@@ -36,6 +38,11 @@ async fn main() -> Result<()> {
     // Load .env variables
     dotenv().ok();
 
+    tracing_subscriber::registry()
+        .with(fmt::Layer::default())
+        .with(EnvFilter::from_default_env())
+        .init();
+
     // Start the prometheus exporter server
     run_prometheus_exporter();
 
@@ -50,9 +57,14 @@ async fn main() -> Result<()> {
     let gas_price = provider
         .get_gas_price()
         .await
-        .expect("failed to fetch gas price");
+        .expect("failed to fetch gas price")
+        .as_u64();
 
-    gauge!("gas_price", gas_price.as_u64() as f64);
+    info!(
+        "received the gas price from the CHAIN_RPC_URL: {}",
+        gas_price
+    );
+    gauge!("gas_price", gas_price as f64);
 
     let chain_id = provider
         .get_chainid()
@@ -71,7 +83,9 @@ async fn main() -> Result<()> {
     loop {
         // Sending 1 wei to ourselves
         let tx = TransactionRequest::pay(signer.address(), 1 as u64);
+        let tx_hash = &tx.clone().sighash();
 
+        // Created to fit the expected type for estimate_gas function
         let legacy_tx = TypedTransaction::Legacy(tx.clone().into());
 
         // Estimate gas
@@ -79,8 +93,10 @@ async fn main() -> Result<()> {
         let gas_estimation = signer
             .estimate_gas(&legacy_tx, None)
             .await
-            .unwrap()
+            .expect("failed to get a gas estimate from the CHAIN_RPC_URL")
             .as_u64();
+
+        info!("received a gas estimate from the CHAIN_RPC_URL");
         gauge!("watchdog.tx.gas", gas_estimation as f64, "type" => "gas_estimate");
 
         gauge!(
@@ -94,11 +110,12 @@ async fn main() -> Result<()> {
         let send_transaction_start = time::Instant::now();
         let pending_tx = match signer.send_transaction(tx, None).await {
             Ok(pending_tx) => {
+                info!("sending to the mempool completed for tx {}", tx_hash);
                 gauge!("watchdog.tx.latency", send_transaction_start.elapsed(), "stage" => "send_transaction");
                 pending_tx
             }
             Err(err) => {
-                eprintln!("failed to send transaction: {:?}", err);
+                warn!("failed to send transaction: {:?}", err);
                 gauge!("watchdog.tx.status", 0.0);
 
                 increment_counter!("watchdog.liveness");
@@ -116,7 +133,7 @@ async fn main() -> Result<()> {
                 receipt.unwrap()
             }
             Err(err) => {
-                eprintln!("failed to get transaction receipt: {:?}", err);
+                warn!("failed to get transaction receipt: {:?}", err);
 
                 increment_counter!("watchdog.liveness");
 
@@ -130,11 +147,14 @@ async fn main() -> Result<()> {
 
         let gas_used = receipt.gas_used.unwrap().as_u64() as f64;
         gauge!("watchdog.tx.gas", gas_used, "type" => "gas_used");
-        let status = receipt.status.unwrap().as_u64() as f64;
-        gauge!("watchdog.tx.status", status);
+        let status = receipt.status.unwrap().as_u64();
+        gauge!("watchdog.tx.status", 1.0, "result" => if status == 1 {"success"} else {"failure"});
 
+        info!("received confirmation for the tx {}", tx_hash);
         increment_counter!("watchdog.liveness");
-        // Wait for before the next iteration
+
+        // Sleep until the next iteration
+        info!("sleeping for {} seconds", TX_PERIOD);
         tokio::time::sleep(Duration::from_secs(TX_PERIOD)).await;
     }
 }
