@@ -83,7 +83,6 @@ async fn main() -> Result<()> {
     loop {
         // Sending 1 wei to ourselves
         let tx = TransactionRequest::pay(signer.address(), 1 as u64);
-        let tx_hash = &tx.clone().sighash();
 
         // Created to fit the expected type for estimate_gas function
         let legacy_tx = TypedTransaction::Legacy(tx.clone().into());
@@ -110,7 +109,10 @@ async fn main() -> Result<()> {
         let send_transaction_start = time::Instant::now();
         let pending_tx = match signer.send_transaction(tx, None).await {
             Ok(pending_tx) => {
-                info!("sending to the mempool completed for tx {}", tx_hash);
+                info!(
+                    "sending to the mempool completed for tx {:?}",
+                    pending_tx.tx_hash()
+                );
                 gauge!("watchdog.tx.latency", send_transaction_start.elapsed(), "stage" => "send_transaction");
                 pending_tx
             }
@@ -150,7 +152,10 @@ async fn main() -> Result<()> {
         let status = receipt.status.unwrap().as_u64();
         gauge!("watchdog.tx.status", 1.0, "result" => if status == 1 {"success"} else {"failure"});
 
-        info!("received confirmation for the tx {}", tx_hash);
+        info!(
+            "received confirmation for the tx {:?}",
+            receipt.transaction_hash
+        );
         increment_counter!("watchdog.liveness");
 
         // Sleep until the next iteration
