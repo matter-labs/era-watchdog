@@ -129,7 +129,11 @@ async fn main() -> Result<()> {
 
         // Wait for the transaction to be mined and get the receipt
         let confirmation_start = time::Instant::now();
-        let receipt = match pending_tx.confirmations(0).await {
+        let receipt = match pending_tx
+            .confirmations(0)
+            .interval(Duration::from_millis(100))
+            .await
+        {
             Ok(receipt) => {
                 gauge!("watchdog.tx.latency", confirmation_start.elapsed(), "stage" => "mempool");
                 receipt.unwrap()
