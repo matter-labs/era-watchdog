@@ -113,12 +113,13 @@ async fn main() -> Result<()> {
                     "sending to the mempool completed for tx {:?}",
                     pending_tx.tx_hash()
                 );
+                gauge!("watchdog.tx.send_status", 1.0);
                 gauge!("watchdog.tx.latency", send_transaction_start.elapsed(), "stage" => "send_transaction");
                 pending_tx
             }
             Err(err) => {
                 warn!("failed to send transaction: {:?}", err);
-                gauge!("watchdog.tx.status", 0.0);
+                gauge!("watchdog.tx.send_status", 0.0);
 
                 increment_counter!("watchdog.liveness");
 
@@ -153,8 +154,8 @@ async fn main() -> Result<()> {
 
         let gas_used = receipt.gas_used.unwrap().as_u64() as f64;
         gauge!("watchdog.tx.gas", gas_used, "type" => "gas_used");
-        let status = receipt.status.unwrap().as_u64();
-        gauge!("watchdog.tx.status", 1.0, "result" => if status == 1 {"success"} else {"failure"});
+        let status = receipt.status.unwrap().as_u64() as f64;
+        gauge!("watchdog.tx.status", status);
 
         info!(
             "received confirmation for the tx {:?}",
