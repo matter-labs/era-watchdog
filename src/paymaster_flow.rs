@@ -85,9 +85,9 @@ impl PaymasterFlow {
 
 impl WatchdogFlow for PaymasterFlow {
     async fn estimate_gas(&self) -> anyhow::Result<U256> {
-        self.era_provider.estimate_fee::<Eip712TransactionRequest>(self.tx_request().into())
+        self.era_provider.estimate_fee::<Eip712TransactionRequest>(self.tx_request())
             .await
-            .map_err(|e| anyhow::Error::new(e))
+            .map_err(anyhow::Error::new)
             .map(|fee| fee.gas_limit)
     }
 

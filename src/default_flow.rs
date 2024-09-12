@@ -32,14 +32,14 @@ impl DefaultFlow {
 impl WatchdogFlow for DefaultFlow {
     async fn estimate_gas(&self) -> anyhow::Result<U256> {
         // Created to fit the expected type for estimate_gas function
-        let legacy_tx = TypedTransaction::Legacy(self.tx_request().into());
+        let legacy_tx = TypedTransaction::Legacy(self.tx_request());
         self.signer
             .estimate_gas(&legacy_tx, None)
             .await
-            .map_err(|e| anyhow::Error::new(e))
+            .map_err(anyhow::Error::new)
     }
 
     async fn send_transaction(&self) -> anyhow::Result<PendingTransaction<Http>> {
-        self.signer.send_transaction(self.tx_request(), None).await.map_err(|e| anyhow::Error::new(e))
+        self.signer.send_transaction(self.tx_request(), None).await.map_err(anyhow::Error::new)
     }
 }
