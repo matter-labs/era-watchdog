@@ -1,26 +1,24 @@
-use crate::WatchdogFlow;
-use ethers::middleware::SignerMiddleware;
-use ethers::prelude::transaction::eip2718::TypedTransaction;
-use ethers::prelude::TransactionRequest;
-use ethers::providers::Http;
-use ethers::providers::{Middleware, PendingTransaction, Provider};
-use ethers::signers::{LocalWallet, Signer};
 use std::sync::Arc;
-use ethers::types::U256;
+
+use ethers::{
+    middleware::SignerMiddleware,
+    prelude::{transaction::eip2718::TypedTransaction, TransactionRequest},
+    providers::{Http, Middleware, PendingTransaction, Provider},
+    signers::{LocalWallet, Signer},
+    types::U256,
+};
+
+use crate::WatchdogFlow;
 
 pub struct DefaultFlow {
     signer: Arc<SignerMiddleware<Provider<Http>, LocalWallet>>,
 }
 
 impl DefaultFlow {
-    pub fn new(pk: String,
-           chain_id: u64,
-           provider: Provider<Http>) -> Self {
+    pub fn new(pk: String, chain_id: u64, provider: Provider<Http>) -> Self {
         let wallet: LocalWallet = pk.parse::<LocalWallet>().unwrap().with_chain_id(chain_id);
         let signer = Arc::new(SignerMiddleware::new(provider, wallet));
-        Self {
-            signer
-        }
+        Self { signer }
     }
 
     fn tx_request(&self) -> TransactionRequest {
@@ -40,6 +38,9 @@ impl WatchdogFlow for DefaultFlow {
     }
 
     async fn send_transaction(&self) -> anyhow::Result<PendingTransaction<Http>> {
-        self.signer.send_transaction(self.tx_request(), None).await.map_err(anyhow::Error::new)
+        self.signer
+            .send_transaction(self.tx_request(), None)
+            .await
+            .map_err(anyhow::Error::new)
     }
 }

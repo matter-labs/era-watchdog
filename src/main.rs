@@ -1,20 +1,18 @@
-mod paymaster_flow;
 mod default_flow;
+mod paymaster_flow;
 
-use std::convert::TryFrom;
-use std::{env, time};
+use std::{convert::TryFrom, env, time};
 
 use dotenv::dotenv;
-use ethers::{prelude::*};
+use ethers::prelude::*;
 use eyre::Result;
 use metrics::{gauge, increment_counter};
 use metrics_exporter_prometheus::PrometheusBuilder;
-use tokio::task::JoinHandle;
-use tokio::time::Duration;
+use tokio::{task::JoinHandle, time::Duration};
 use tracing::{info, warn};
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
-use crate::default_flow::DefaultFlow;
-use crate::paymaster_flow::PaymasterFlow;
+
+use crate::{default_flow::DefaultFlow, paymaster_flow::PaymasterFlow};
 
 pub fn run_prometheus_exporter() -> JoinHandle<()> {
     let builder = {
@@ -64,7 +62,12 @@ impl WatchdogFlow for FlowType {
     }
 }
 
-fn create_flow(paymaster_address: Option<String>, pk: String, chain_id: u64, provider: Provider<Http>) -> FlowType {
+fn create_flow(
+    paymaster_address: Option<String>,
+    pk: String,
+    chain_id: u64,
+    provider: Provider<Http>,
+) -> FlowType {
     match paymaster_address {
         Some(x) => FlowType::Paymaster(PaymasterFlow::new(pk, x, chain_id, provider)),
         None => FlowType::Default(DefaultFlow::new(pk, chain_id, provider)),
@@ -100,7 +103,6 @@ async fn main() -> Result<()> {
 
     let flow = create_flow(paymaster_address, pk, chain_id.as_u64(), provider.clone());
 
-
     // Fetch the latest gas price from the provider
     let gas_price = provider
         .get_gas_price()
@@ -120,7 +122,8 @@ async fn main() -> Result<()> {
     loop {
         // Estimate gas
         let estimate_gas_start = time::Instant::now();
-        let gas_estimation = flow.estimate_gas()
+        let gas_estimation = flow
+            .estimate_gas()
             .await
             .expect("failed to get a gas estimate from the CHAIN_RPC_URL")
             .as_u64();
