@@ -1,15 +1,18 @@
-use std::convert::TryFrom;
-use std::{env, sync::Arc, time};
+mod default_flow;
+mod paymaster_flow;
+
+use std::{convert::TryFrom, env, time};
 
 use dotenv::dotenv;
-use ethers::{prelude::*, types::transaction::eip2718::TypedTransaction};
+use ethers::prelude::*;
 use eyre::Result;
 use metrics::{gauge, increment_counter};
 use metrics_exporter_prometheus::PrometheusBuilder;
-use tokio::task::JoinHandle;
-use tokio::time::Duration;
+use tokio::{task::JoinHandle, time::Duration};
 use tracing::{info, warn};
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
+
+use crate::{default_flow::DefaultFlow, paymaster_flow::PaymasterFlow};
 
 pub fn run_prometheus_exporter() -> JoinHandle<()> {
     let builder = {
@@ -33,6 +36,24 @@ pub fn run_prometheus_exporter() -> JoinHandle<()> {
     })
 }
 
+#[async_trait::async_trait]
+trait WatchdogFlow {
+    async fn estimate_gas(&self) -> anyhow::Result<U256>;
+    async fn send_transaction(&self) -> anyhow::Result<PendingTransaction<Http>>;
+}
+
+fn create_flow(
+    paymaster_address: Option<String>,
+    pk: String,
+    chain_id: u64,
+    provider: Provider<Http>,
+) -> Box<dyn WatchdogFlow> {
+    match paymaster_address {
+        Some(x) => Box::new(PaymasterFlow::new(pk, x, chain_id, provider)),
+        None => Box::new(DefaultFlow::new(pk, chain_id, provider)),
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     // Load .env variables
@@ -50,8 +71,17 @@ async fn main() -> Result<()> {
     let chain_rpc_url =
         env::var("CHAIN_RPC_URL").expect("couldn't read environment variable CHAIN_RPC_URL");
 
+    let paymaster_address = env::var("PAYMASTER_ADDRESS").ok();
+
     // Connect to the network
     let provider = Provider::<Http>::try_from(chain_rpc_url).expect("failed to create provider");
+
+    let chain_id = provider
+        .get_chainid()
+        .await
+        .expect("failed to get the chain id from provider");
+
+    let flow = create_flow(paymaster_address, pk, chain_id.as_u64(), provider.clone());
 
     // Fetch the latest gas price from the provider
     let gas_price = provider
@@ -66,31 +96,14 @@ async fn main() -> Result<()> {
     );
     gauge!("gas_price", gas_price as f64);
 
-    let chain_id = provider
-        .get_chainid()
-        .await
-        .expect("failed to get the chain id from provider");
-
-    // Create the wallet from the private key
-    let wallet: LocalWallet = pk.parse::<LocalWallet>()?.with_chain_id(chain_id.as_u64());
-
-    // Connect the wallet to the provider
-    let signer = Arc::new(SignerMiddleware::new(provider, wallet));
-
     // Every 5 minutes
     const TX_PERIOD: u64 = 300;
 
     loop {
-        // Sending 1 wei to ourselves
-        let tx = TransactionRequest::pay(signer.address(), 1 as u64);
-
-        // Created to fit the expected type for estimate_gas function
-        let legacy_tx = TypedTransaction::Legacy(tx.clone().into());
-
         // Estimate gas
         let estimate_gas_start = time::Instant::now();
-        let gas_estimation = signer
-            .estimate_gas(&legacy_tx, None)
+        let gas_estimation = flow
+            .estimate_gas()
             .await
             .expect("failed to get a gas estimate from the CHAIN_RPC_URL")
             .as_u64();
@@ -107,7 +120,7 @@ async fn main() -> Result<()> {
         // Send the transaction
         let tx_submit_start = time::Instant::now();
         let send_transaction_start = time::Instant::now();
-        let pending_tx = match signer.send_transaction(tx, None).await {
+        let pending_tx = match flow.send_transaction().await {
             Ok(pending_tx) => {
                 info!(
                     "sending to the mempool completed for tx {:?}",
