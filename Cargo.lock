@@ -332,6 +332,7 @@ name = "caller"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "dotenv",
  "ethers",
  "eyre",

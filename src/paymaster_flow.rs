@@ -86,6 +86,7 @@ impl PaymasterFlow {
     }
 }
 
+#[async_trait::async_trait]
 impl WatchdogFlow for PaymasterFlow {
     async fn estimate_gas(&self) -> anyhow::Result<U256> {
         self.era_provider

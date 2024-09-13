@@ -36,30 +36,10 @@ pub fn run_prometheus_exporter() -> JoinHandle<()> {
     })
 }
 
+#[async_trait::async_trait]
 trait WatchdogFlow {
     async fn estimate_gas(&self) -> anyhow::Result<U256>;
     async fn send_transaction(&self) -> anyhow::Result<PendingTransaction<Http>>;
-}
-
-enum FlowType {
-    Paymaster(PaymasterFlow),
-    Default(DefaultFlow),
-}
-
-impl WatchdogFlow for FlowType {
-    async fn estimate_gas(&self) -> anyhow::Result<U256> {
-        match self {
-            FlowType::Paymaster(flow) => flow.estimate_gas().await,
-            FlowType::Default(flow) => flow.estimate_gas().await,
-        }
-    }
-
-    async fn send_transaction(&self) -> anyhow::Result<PendingTransaction<Http>> {
-        match self {
-            FlowType::Paymaster(flow) => flow.send_transaction().await,
-            FlowType::Default(flow) => flow.send_transaction().await,
-        }
-    }
 }
 
 fn create_flow(
@@ -67,10 +47,10 @@ fn create_flow(
     pk: String,
     chain_id: u64,
     provider: Provider<Http>,
-) -> FlowType {
+) -> Box<dyn WatchdogFlow> {
     match paymaster_address {
-        Some(x) => FlowType::Paymaster(PaymasterFlow::new(pk, x, chain_id, provider)),
-        None => FlowType::Default(DefaultFlow::new(pk, chain_id, provider)),
+        Some(x) => Box::new(PaymasterFlow::new(pk, x, chain_id, provider)),
+        None => Box::new(DefaultFlow::new(pk, chain_id, provider)),
     }
 }
 

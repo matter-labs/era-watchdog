@@ -27,6 +27,7 @@ impl DefaultFlow {
     }
 }
 
+#[async_trait::async_trait]
 impl WatchdogFlow for DefaultFlow {
     async fn estimate_gas(&self) -> anyhow::Result<U256> {
         // Created to fit the expected type for estimate_gas function
