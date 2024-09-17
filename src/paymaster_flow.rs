@@ -78,7 +78,7 @@ impl PaymasterFlow {
         Eip712TransactionRequest::new()
             .from(address)
             .to(address)
-            .value::<U256>(1u64.into())
+            .value::<U256>(0u64.into())
             .custom_data(Eip712Meta::new().paymaster_params(PaymasterParams {
                 paymaster: self.paymaster,
                 paymaster_input: self.paymaster_encoded_input.clone(),
