@@ -100,9 +100,9 @@ dependencies = [
 
 [[package]]
 name = "anyhow"
-version = "1.0.71"
+version = "1.0.89"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9c7d0618f0e0b7e8ff11427422b64564d5fb0be1940354bfe2e0529b18a9d9b8"
+checksum = "86fdf8605db99b54d3cd748a44c6d04df638eb5dafb219b135d0149bd0db01f6"
 
 [[package]]
 name = "arrayvec"
@@ -4202,10 +4202,11 @@ dependencies = [
 
 [[package]]
 name = "zksync-web3-rs"
-version = "0.2.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "74b3258b6df75ec6544a73edb98b40f25e7e6d983fe7aab4ec4d460df4462def"
+checksum = "aff3789d1bd1dfd8837d7c09dfde538661a54b8d322b71859e4fcad40c25b3b5"
 dependencies = [
+ "anyhow",
  "async-trait",
  "clap 4.4.18",
  "env_logger",
