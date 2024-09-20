@@ -1,5 +1,7 @@
-use std::{str::FromStr, sync::Arc};
-
+use crate::WatchdogFlow;
+use ethers::core::k256::ecdsa::signature::hazmat::PrehashSigner;
+use ethers::core::k256::ecdsa::RecoveryId;
+use ethers::prelude::transaction::eip712::Eip712Error;
 use ethers::{
     abi::{Address, Bytes},
     core::k256::ecdsa::SigningKey,
@@ -8,14 +10,16 @@ use ethers::{
     signers::{Signer, Wallet},
     types::U256,
 };
+use std::fmt::Debug;
+use std::{str::FromStr, sync::Arc};
+use zksync_web3_rs::eip712::Eip712Transaction;
+use zksync_web3_rs::zks_utils::EIP712_TX_TYPE;
 use zksync_web3_rs::{
     core::abi::{Contract, Token},
     eip712::{Eip712Meta, Eip712TransactionRequest, PaymasterParams},
     zks_provider::ZKSProvider,
     ZKSWallet,
 };
-
-use crate::WatchdogFlow;
 
 const PAYMASTER_ABI: &str = r#"
     [
@@ -97,10 +101,55 @@ impl WatchdogFlow for PaymasterFlow {
     }
 
     async fn send_transaction(&self) -> anyhow::Result<PendingTransaction<Http>> {
+        let tx_request = self.tx_request();
+
+        tracing::info!("Preparing to send transaction {:?}", tx_request);
+        let mut request: Eip712TransactionRequest = tx_request.try_into().map_err(|_e| {
+            ProviderError::CustomError("error on send_transaction_eip712".to_owned())
+        })?;
+
+        let address = self.zk_wallet.l2_wallet.address();
+        let gas_price = self.era_provider.get_gas_price().await?;
+        tracing::info!("Gas price {}", gas_price);
+        let nonce = self
+            .era_provider
+            .get_transaction_count(address, None)
+            .await?;
+        tracing::info!("Nonce {}", nonce);
+        request = request
+            .chain_id(self.zk_wallet.l2_wallet.chain_id())
+            .nonce(nonce)
+            .gas_price(gas_price)
+            .max_fee_per_gas(gas_price);
+
+        let custom_data = request.clone().custom_data;
+        let fee = self.era_provider.estimate_fee(request.clone()).await?;
+        tracing::info!("Estimated fee {:?}", fee);
+
+        request = request
+            .max_priority_fee_per_gas(fee.max_priority_fee_per_gas)
+            .max_fee_per_gas(fee.max_fee_per_gas)
+            .gas_limit(fee.gas_limit);
+        let signable_data: Eip712Transaction = request
+            .clone()
+            .try_into()
+            .map_err(|e: Eip712Error| ProviderError::CustomError(e.to_string()))?;
+        let signature: Signature = self
+            .zk_wallet
+            .l2_wallet
+            .sign_typed_data(&signable_data)
+            .await
+            .map_err(|e| ProviderError::CustomError(format!("error signing transaction: {e}")))?;
+        request = request.custom_data(custom_data.custom_signature(signature.to_vec()));
+        let encoded_rlp = &*request
+            .rlp_signed(signature)
+            .map_err(|e| ProviderError::CustomError(format!("Error in the rlp encoding {e}")))?;
+
         let result = self
             .era_provider
-            .send_transaction_eip712(&self.zk_wallet.l2_wallet, self.tx_request())
+            .send_raw_transaction([&[EIP712_TX_TYPE], encoded_rlp].concat().into())
             .await?;
+
         Ok(result)
     }
 }
