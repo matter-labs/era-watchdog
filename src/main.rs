@@ -81,8 +81,6 @@ async fn main() -> Result<()> {
         .await
         .expect("failed to get the chain id from provider");
 
-    let flow = create_flow(paymaster_address, pk, chain_id.as_u64(), provider.clone());
-
     // Fetch the latest gas price from the provider
     let gas_price = provider
         .get_gas_price()
@@ -100,6 +98,12 @@ async fn main() -> Result<()> {
     const TX_PERIOD: u64 = 300;
 
     loop {
+        let flow = create_flow(
+            paymaster_address.clone(),
+            pk.clone(),
+            chain_id.as_u64(),
+            provider.clone(),
+        );
         // Estimate gas
         let estimate_gas_start = time::Instant::now();
         let gas_estimation = flow
