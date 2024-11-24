@@ -1,3 +1,4 @@
 /target
 shell.nix
 .env
+.idea

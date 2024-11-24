@@ -1,46 +1,46 @@
-use std::sync::Arc;
-
-use ethers::{
-    middleware::SignerMiddleware,
-    prelude::{transaction::eip2718::TypedTransaction, TransactionRequest},
-    providers::{Http, Middleware, PendingTransaction, Provider},
-    signers::{LocalWallet, Signer},
-    types::U256,
+use alloy::transports::BoxTransport;
+use alloy::{
+    primitives::U256,
+    providers::ProviderBuilder,
+    signers::local::PrivateKeySigner,
 };
+use alloy::network::{Ethereum, EthereumWallet, TransactionBuilder};
+use alloy::providers::{PendingTransactionBuilder, Provider, WalletProvider};
+use alloy::rpc::types::TransactionRequest;
+use crate::SimpleTxFlow;
 
-use crate::WatchdogFlow;
-
-pub struct DefaultFlow {
-    signer: Arc<SignerMiddleware<Provider<Http>, LocalWallet>>,
+pub struct DefaultFlow<P:Provider> {
+    // this type is cursed
+    provider: alloy::providers::fillers::FillProvider<alloy::providers::fillers::JoinFill<alloy::providers::fillers::JoinFill<alloy::providers::Identity, alloy::providers::fillers::JoinFill<alloy::providers::fillers::GasFiller, alloy::providers::fillers::JoinFill<alloy::providers::fillers::BlobGasFiller, alloy::providers::fillers::JoinFill<alloy::providers::fillers::NonceFiller, alloy::providers::fillers::ChainIdFiller>>>>, alloy::providers::fillers::WalletFiller<EthereumWallet>>, P, alloy::transports::BoxTransport, alloy::network::Ethereum>,
 }
 
-impl DefaultFlow {
-    pub fn new(pk: String, chain_id: u64, provider: Provider<Http>) -> Self {
-        let wallet: LocalWallet = pk.parse::<LocalWallet>().unwrap().with_chain_id(chain_id);
-        let signer = Arc::new(SignerMiddleware::new(provider, wallet));
-        Self { signer }
+impl<P: Provider> DefaultFlow<P> {
+    pub fn new(pk: String, provider: P) -> Self
+    {
+        let signer: PrivateKeySigner = pk.parse().expect("Could not parse private key");
+        let wallet = EthereumWallet::new(signer);
+        let new_provider = ProviderBuilder::new().with_recommended_fillers().wallet(wallet).on_provider(provider);
+        Self { provider: new_provider }
     }
 
     fn tx_request(&self) -> TransactionRequest {
         // Sending 1 wei to ourselves
-        TransactionRequest::pay(self.signer.address(), 1u64)
+        TransactionRequest::default()
+            .with_from(self.provider.default_signer_address())
+            .with_to(self.provider.default_signer_address())
+            .with_value(U256::from(1))
     }
 }
 
 #[async_trait::async_trait]
-impl WatchdogFlow for DefaultFlow {
-    async fn estimate_gas(&self) -> anyhow::Result<U256> {
-        // Created to fit the expected type for estimate_gas function
-        let legacy_tx = TypedTransaction::Legacy(self.tx_request());
-        self.signer
-            .estimate_gas(&legacy_tx, None)
-            .await
-            .map_err(anyhow::Error::new)
+impl<P:Provider> SimpleTxFlow for DefaultFlow<P> {
+    async fn estimate_gas(&self) -> anyhow::Result<u64> {
+        self.provider.estimate_gas(&self.tx_request()).await.map_err(anyhow::Error::new)
     }
 
-    async fn send_transaction(&self) -> anyhow::Result<PendingTransaction<Http>> {
-        self.signer
-            .send_transaction(self.tx_request(), None)
+    async fn send_transaction(&self) -> anyhow::Result<PendingTransactionBuilder<BoxTransport, Ethereum>> {
+        self.provider
+            .send_transaction(self.tx_request())
             .await
             .map_err(anyhow::Error::new)
     }

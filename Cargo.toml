@@ -4,7 +4,6 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-ethers = { version = "*", features = ["abigen", "ipc", "rustls", "ws"] }
 eyre = "0.6.8"
 tokio = { version = "1.28.1", features = ["macros", "rt-multi-thread"] }
 hex = "*"
@@ -16,5 +15,6 @@ tracing = "0.1.37"
 tracing-subscriber = { version = "0.3.17", features = ["env-filter"] }
 anyhow = "1.0.71"
 async-trait = "0.1.68"
-zksync_types = "0.1"
+#zksync_types = "0.1"
 serde_json = "1.0.96"
+alloy = { version = "0.6.4", features = ["full"] }
