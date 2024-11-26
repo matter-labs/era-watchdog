@@ -1,0 +1,31 @@
+{
+  "name": "zkstack-watchdog",
+  "version": "0.1.0",
+  "description": "Watchdog for zkstack chains",
+  "repository": "git@github.com:matter-labs/era-watchdog.git",
+  "author": "Matter Labs",
+  "license": "MIT",
+  "private": true,
+  "prettier": "@matterlabs/prettier-config",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc -p . --noEmit",
+    "lint": "eslint . --ext ./src/* --fix --max-warnings=0",
+    "start": "ts-node src/main.ts"
+  },
+  "devDependencies": {
+    "@matterlabs/eslint-config-typescript": "^1.1.2",
+    "@matterlabs/prettier-config": "^1.0.3",
+    "eslint": "^9.15.0",
+    "prettier": "^3.4.1"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+
+    "ethers": "6",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.2",
+    "zksync-ethers": "^6.15.1"
+  },
+  "packageManager": "yarn@1.22.22+sha1.ac34549e6aa8e7ead463a7407e1c7390f61a6610"
+}
