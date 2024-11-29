@@ -2,6 +2,11 @@ name: Validate PR
 
 on:
   pull_request:
+    types:
+      - opened
+      - edited
+      - reopened
+      - synchronize
 
 jobs:
   label:
