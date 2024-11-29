@@ -5,6 +5,7 @@ import { collectDefaultMetrics, register } from "prom-client";
 import winston from "winston";
 import { Provider, Wallet } from "zksync-ethers";
 
+import { DepositFlow } from "./deposit";
 import { setupLogger } from "./logger";
 import { SimpleTxFlow } from "./transfer";
 import { MIN, unwrap } from "./utils";
@@ -18,6 +19,15 @@ const main = async () => {
     `Wallet ${wallet.address} balance is ${ethers.formatEther(await l2Provider.getBalance(wallet.address))}`
   );
   new SimpleTxFlow(l2Provider, wallet, paymasterAddress, 5 * MIN).run();
+
+  if (process.env.CHAIN_L1_RPC_URL != null) {
+    const l1Provider = new Provider(unwrap(process.env.CHAIN_L1_RPC_URL));
+    const walletDeposit = new Wallet(unwrap(process.env.WALLET_KEY), l2Provider, l1Provider);
+    winston.info(
+      `Wallet ${walletDeposit.address} L1 balance is ${ethers.formatEther(await l1Provider.getBalance(walletDeposit.address))}`
+    );
+    new DepositFlow(walletDeposit).run();
+  }
 };
 
 collectDefaultMetrics();
