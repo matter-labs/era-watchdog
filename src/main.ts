@@ -2,16 +2,21 @@ import "dotenv/config";
 import { ethers } from "ethers";
 import express from "express";
 import { collectDefaultMetrics, register } from "prom-client";
+import winston from "winston";
 import { Provider, Wallet } from "zksync-ethers";
 
+import { setupLogger } from "./logger";
 import { SimpleTxFlow } from "./transfer";
 import { unwrap } from "./utils";
 
 const main = async () => {
+  setupLogger(process.env.NODE_ENV, process.env.LOG_LEVEL);
   const l2Provider = new Provider(unwrap(process.env.CHAIN_RPC_URL));
   const wallet = new Wallet(unwrap(process.env.WALLET_KEY), l2Provider);
   const paymasterAddress = process.env.PAYMASTER_ADDRESS;
-  console.log("Hello World! balance is", ethers.formatEther(await l2Provider.getBalance(wallet.address)));
+  winston.info(
+    `Wallet ${wallet.address} balance is ${ethers.formatEther(await l2Provider.getBalance(wallet.address))}`
+  );
   new SimpleTxFlow(l2Provider, wallet, paymasterAddress).run();
 };
 

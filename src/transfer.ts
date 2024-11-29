@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { toBigInt } from "ethers";
 import { Counter, Gauge } from "prom-client";
+import winston from "winston";
 import { utils } from "zksync-ethers";
 
 import { unwrap, withLatency } from "./utils";
@@ -91,19 +92,20 @@ export class SimpleTxFlow {
       );
       send_success = 1;
       this.metric_tx_latency.set({ stage: "send_transaction" }, send_latency);
-      console.log("tx sent in", send_latency, "s");
+      winston.info(`tx sent in ${send_latency}s`);
 
       // wait for transaction
       const { return: txReceipt, latency: mempool_time } = await withLatency(() => txResponse.wait(1)); // included in a block
       this.metric_tx_latency.set({ stage: "mempool" }, mempool_time);
       this.metric_tx_gas.set({ type: "gas_used" }, Number(unwrap(txReceipt?.gasUsed)));
       this.metric_tx_status.set(Number(unwrap(txReceipt?.status)));
-      console.log("tx mined in", mempool_time, "s");
+      winston.info(`tx mined in ${mempool_time}s`);
 
       const timeTotal = (Date.now() - timeStart) / 1000; // in seconds
       this.metric_tx_latency_total.set(timeTotal);
-    } catch (e) {
-      console.error("tx failed", e);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } catch (error: any) {
+      winston.error("simple tx error: " + error?.message, error?.stack);
     } finally {
       this.metric_tx_send_status.set(send_success);
       this.metric_liveness.inc();
