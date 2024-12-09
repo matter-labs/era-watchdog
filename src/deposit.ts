@@ -1,12 +1,12 @@
 import "dotenv/config";
-import { Gauge } from "prom-client";
 import winston from "winston";
+import { utils } from "zksync-ethers";
 
-import { withLatency } from "./utils";
+import { FlowMetricRecorder } from "./flowMetric";
+import { MIN, SEC } from "./utils";
 
 import type { BigNumberish, BytesLike, Overrides } from "ethers";
-import { Provider, types, Wallet, utils } from "zksync-ethers";
-import { FlowMetricRecorder } from "./flowMetric";
+import type { types, Wallet } from "zksync-ethers";
 
 const DEPOSIT_INTERVAL = 300000; // 300sec
 
@@ -27,8 +27,6 @@ type DepositTxRequest = {
   customBridgeData?: BytesLike;
 };
 
-const FLOW_NAME = "deposit";
-
 export class DepositFlow {
   private metricRecorder: FlowMetricRecorder;
 
@@ -45,7 +43,6 @@ export class DepositFlow {
   }
 
   protected async step() {
-    let success = 0;
     try {
       this.metricRecorder.recordFlowStart();
 
@@ -54,35 +51,41 @@ export class DepositFlow {
       //TODO deposit price
 
       //TODO populate transaction
-      
+
       // send L1 deposit transaction
-      const { return: depositHandle, latency: send_latency } = await withLatency(() => this.wallet.deposit(populated));
-      this.metric_latency.set({ stage: "send_transaction", flow: FLOW_NAME }, send_latency);
-      winston.info(`Deposit tx (L1: ${depositHandle.hash}) sent on L1 in ${send_latency}s`);
+      const depositHandle = await this.metricRecorder.stepExecution({
+        stepName: "send_transaction",
+        stepTimeoutMs: 30 * SEC,
+        fn: () => this.wallet.deposit(populated),
+      });
+      winston.info(`Deposit tx (L1: ${depositHandle.hash}) sent on L1`);
 
       // wait for transaction
-      const { return: txReceipt, latency: mempool_time } = await withLatency(() => depositHandle.waitL1Commit(1)); // included in a block on L1
-      this.metric_latency.set({ stage: "l1_mempool", flow: FLOW_NAME }, mempool_time);
+      const txReceipt = await this.metricRecorder.stepExecution({
+        stepName: "l1_mempool",
+        stepTimeoutMs: 3 * MIN,
+        fn: () => depositHandle.waitL1Commit(1),
+      }); // included in a block on L1
       //this.metric_gas.set({ type: "l1_gas_used" }, Number(unwrap(txReceipt?.gasUsed)));
       const l2TxHash = utils.getL2HashFromPriorityOp(
         txReceipt,
         await this.wallet._providerL2().getMainContractAddress()
       );
       const txHashs = `(L1: ${depositHandle.hash}, L2: ${l2TxHash})`;
-      winston.info(`Deposit tx ${txHashs} mined on l1 in ${mempool_time}s`);
+      winston.info(`Deposit tx ${txHashs} mined on l1`);
 
       // wait for deposit to be finalized
-      const { latency: l2_time } = await withLatency(() => depositHandle.wait(1));
-      winston.info(`deposit tx ${txHashs} mined on L2 in ${l2_time}s`);
-      this.metric_latency.set({ stage: "l2_inclusion", flow: FLOW_NAME }, l2_time);
-      const timeTotal = (Date.now() - timeStart) / 1000; // in seconds
-      this.metric_latency_total.set(timeTotal);
-      success = 1;
+      await this.metricRecorder.stepExecution({
+        stepName: "l2_inclusion",
+        stepTimeoutMs: 5 * MIN,
+        fn: () => depositHandle.wait(1),
+      });
+      winston.info(`deposit tx ${txHashs} mined on L2`);
+
+      this.metricRecorder.recordFlowSuccess();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       winston.error("simple tx error: " + error?.message, error?.stack);
-    } finally {
-      this.metric_status.set({ flow: FLOW_NAME }, success);
     }
   }
 
