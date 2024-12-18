@@ -1,4 +1,4 @@
-# era-watchdog
+# ZK Stack Watchdog
 Submits transactions periodically on-chain and exports related metrics by
 running a prometheus exporter.
 
@@ -13,7 +13,7 @@ For more details, please see the [design doc](https://www.notion.so/matterlabs/E
 
 ## Running the Service
 
-for local development:
+### Local development
 
 ```bash
 yarn
@@ -25,7 +25,7 @@ export CHAIN_L1_RPC_URL=http://127.0.0.1:8545
 yarn run start
 ```
 
-for production:
+### Production
 
 - set environment variables:
     - `NODE_ENV=production` -- affects logging
