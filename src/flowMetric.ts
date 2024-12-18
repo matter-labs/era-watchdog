@@ -72,7 +72,7 @@ export class FlowMetricRecorder {
     this.currentStep = stepName;
     const helpers = {
       recordStepGas: (gas: string | number | bigint) => {
-        store.metric_step_gas.set({ flow: this.flowName, step: "send_transaction" }, Number(gas));
+        store.metric_step_gas.set({ flow: this.flowName, step: stepName }, Number(gas));
       },
     };
     const ret = await withTimeout(fn(helpers), stepTimeoutMs, `step ${stepName}`);
