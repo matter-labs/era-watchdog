@@ -12,7 +12,7 @@ export const setupLogger = (environment: string | undefined, logLevel: string | 
           format: "DD/MM/YYYY HH:mm:ss.SSS",
         }),
         format.colorize(),
-        format.simple(), // ? format.json() :
+        format.simple(),
       ];
 
   const defaultLogLevel = isProduction ? "info" : "debug";
