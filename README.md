@@ -9,18 +9,30 @@ distinguish genuine low activity from outages. Knowing whether the chain is
 healthy or not is important given the potential for sudden increases in activity
 and the need for the chain to be able to handle those changes seamlessly.
 
-For more details, please see the [design doc](https://www.notion.so/matterlabs/Specs-Database-f147ab46eb0e4c4293adf6fa13dccaa8?p=e7ff2347c1cc4a2fa69de08d36caef16&pm=s).
+For more details, please see the [design doc](https://www.notion.so/matterlabs/Era-Watchdog-e7ff2347c1cc4a2fa69de08d36caef16?pvs=4).
 
 ## Running the Service
-Load the necessary environement variables:
+
+for local development:
+
 ```bash
-CHAIN_RPC_URL=https://zksync2-testnet.zksync.dev:443
-WALLET_KEY=deadbeef
+yarn
+export WALLET_KEY=0xdeadbeef  # Wallet key to use
+export CHAIN_RPC_URL=http://127.0.0.1:3052 # l2 json-rpc endpoint
+export PAYMASTER_ADDRESS=0x111C3E89Ce80e62EE88318C2804920D4c96f92bb  # if using paymaster for transactions
+export METRICS_PORT=8090  # Override to avoid collisions with zkstack server
+export CHAIN_L1_RPC_URL=http://127.0.0.1:8545
+yarn run start
 ```
 
-start the service:
-```bash
-cargo run
-```
+for production:
 
-scrape the metrics from port `8080`
+- set environment variables:
+    - `NODE_ENV=production` -- affects logging
+    - `LOG_LEVEL` -- appropriate logging level
+    - `CHAIN_RPC_URL` -- l2 json-rpc endpoint
+    - `WALLET_KEY` -- watchdog wallet key (`0x` prefixed hex string)
+    - `PAYMASTER_ADDRESS` -- set if transctions should use a paymaster
+    - `METRICS_PORT` -- override of metrics port, defaults to 8080
+
+- run the container
