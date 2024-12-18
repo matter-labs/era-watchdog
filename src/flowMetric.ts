@@ -39,7 +39,6 @@ const store = new FlowMetricStore();
 
 export class FlowMetricRecorder {
   startTime: number | null = null;
-  private currentStep: string | null = null;
   private _lastStepLatency: number | null = null;
   private _lastExecutionTotalLatency: number | null = null;
   constructor(private flowName: string) {}
@@ -69,14 +68,12 @@ export class FlowMetricRecorder {
     fn: (helpers: { recordStepGas: (gas: string | number | bigint) => void }) => Promise<T>;
   }): Promise<T> {
     const start = Date.now();
-    this.currentStep = stepName;
     const helpers = {
       recordStepGas: (gas: string | number | bigint) => {
         store.metric_step_gas.set({ flow: this.flowName, step: stepName }, Number(gas));
       },
     };
     const ret = await withTimeout(fn(helpers), stepTimeoutMs, `step ${stepName}`);
-    this.currentStep = null;
     const end = Date.now();
     const latency = (end - start) / 1000; // in seconds
     store.metric_latency.set({ flow: this.flowName, stage: stepName }, latency);
