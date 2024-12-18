@@ -46,7 +46,7 @@ export class FlowMetricRecorder {
 
   public recordFlowStart() {
     this.startTime = Date.now();
-    winston.info(`Flow ${this.flowName} started`);
+    winston.info(`[${this.flowName}] Flow started`);
   }
 
   /// function for getting last step latency, used for legacy compatibility
