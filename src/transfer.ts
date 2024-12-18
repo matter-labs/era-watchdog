@@ -1,50 +1,54 @@
 import "dotenv/config";
-import { toBigInt } from "ethers";
 import { Counter, Gauge } from "prom-client";
 import winston from "winston";
 import { utils } from "zksync-ethers";
 
-import { unwrap, withLatency } from "./utils";
+import { FlowMetricRecorder } from "./flowMetric";
+import { MIN, SEC, unwrap } from "./utils";
 
 import type { types, Provider, Wallet } from "zksync-ethers";
 
-const SIMPLE_TX_INTERVAL = 300000; // 300sec
-
 export class SimpleTxFlow {
   private metric_gas_price: Gauge;
-  private metric_tx_gas: Gauge;
-  private metric_tx_latency: Gauge;
-  private metric_tx_latency_total: Gauge;
-  private metric_tx_send_status: Gauge;
-  private metric_tx_status: Gauge;
-  private metric_liveness: Counter;
+  private legacy_metric_tx_gas: Gauge;
+  private legacy_metric_tx_latency: Gauge;
+  private legacy_metric_tx_latency_total: Gauge;
+  private legacy_metric_tx_send_status: Gauge;
+  private legacy_metric_tx_status: Gauge;
+  private legacy_metric_liveness: Counter;
+  private metricRecorder: FlowMetricRecorder;
 
   constructor(
     private provider: Provider,
     private wallet: Wallet,
-    private paymasterAddress: string | undefined
+    private paymasterAddress: string | undefined,
+    private intervalMs: number
   ) {
+    this.metricRecorder = new FlowMetricRecorder("transfer");
     this.metric_gas_price = new Gauge({ name: "gas_price", help: "Gas price on L2" });
-    this.metric_tx_gas = new Gauge({
+    this.legacy_metric_tx_gas = new Gauge({
       name: "watchdog_tx_gas",
       help: "Simple transfer gas estimate",
       labelNames: ["type"],
     });
-    this.metric_tx_latency = new Gauge({
+    this.legacy_metric_tx_latency = new Gauge({
       name: "watchdog_tx_latency",
       help: "Simple transfer latency",
       labelNames: ["stage"],
     });
-    this.metric_tx_latency_total = new Gauge({
+    this.legacy_metric_tx_latency_total = new Gauge({
       name: "watchdog_tx_latency_total",
       help: "Simple transfer total latency",
     });
-    this.metric_tx_send_status = new Gauge({ name: "watchdog_tx_send_status", help: "Simple transfer send status" });
-    this.metric_liveness = new Counter({
+    this.legacy_metric_tx_send_status = new Gauge({
+      name: "watchdog_tx_send_status",
+      help: "Simple transfer send status",
+    });
+    this.legacy_metric_liveness = new Counter({
       name: "watchdog_liveness",
       help: "Watchdog liveness. Increases on failures.",
     });
-    this.metric_tx_status = new Gauge({ name: "watchdog_tx_status", help: "Simple transfer status" });
+    this.legacy_metric_tx_status = new Gauge({ name: "watchdog_tx_status", help: "Simple transfer status" });
   }
 
   protected getTxRequest(): types.TransactionRequest {
@@ -72,7 +76,7 @@ export class SimpleTxFlow {
   protected async step() {
     let send_success = 0;
     try {
-      const timeStart = Date.now();
+      this.metricRecorder.recordFlowStart();
 
       // gas price metric
       const maxFeePerGas = await this.provider.getFeeData().then((feeData) => feeData.gasPrice ?? feeData.maxFeePerGas);
@@ -80,43 +84,58 @@ export class SimpleTxFlow {
 
       // populate transaction
       const tx = this.getTxRequest();
-      const { return: populated, latency: estimate_letancy } = await withLatency(() =>
-        this.wallet.populateTransaction(tx)
-      );
-      this.metric_tx_gas.set({ type: "gas_estimate" }, Number(toBigInt(unwrap(populated.gasLimit))));
-      this.metric_tx_latency.set({ stage: "estimate_gas" }, estimate_letancy);
+      const populated = await this.metricRecorder.stepExecution({
+        stepName: "populate_transaction",
+        stepTimeoutMs: 10 * SEC,
+        fn: async ({ recordStepGas }) => {
+          const populated = await this.wallet.populateTransaction(tx);
+          recordStepGas(unwrap(populated.gasLimit));
+          return populated;
+        },
+      });
+      this.legacy_metric_tx_gas.set({ type: "gas_estimate" }, Number(unwrap(populated.gasLimit)));
+      this.legacy_metric_tx_latency.set({ stage: "estimate_gas" }, this.metricRecorder.legacyGetLastStepLatecy());
 
       // send transaction
-      const { return: txResponse, latency: send_latency } = await withLatency(() =>
-        this.wallet.sendTransaction(populated)
-      );
+      const txResponse = await this.metricRecorder.stepExecution({
+        stepName: "send_transaction",
+        stepTimeoutMs: 10 * SEC,
+        fn: () => this.wallet.sendTransaction(populated),
+      });
       send_success = 1;
-      this.metric_tx_latency.set({ stage: "send_transaction" }, send_latency);
-      winston.info(`tx sent in ${send_latency}s`);
+      this.legacy_metric_tx_latency.set({ stage: "send_transaction" }, this.metricRecorder.legacyGetLastStepLatecy());
 
       // wait for transaction
-      const { return: txReceipt, latency: mempool_time } = await withLatency(() => txResponse.wait(1)); // included in a block
-      this.metric_tx_latency.set({ stage: "mempool" }, mempool_time);
-      this.metric_tx_gas.set({ type: "gas_used" }, Number(unwrap(txReceipt?.gasUsed)));
-      this.metric_tx_status.set(Number(unwrap(txReceipt?.status)));
-      winston.info(`tx mined in ${mempool_time}s`);
+      const txReceipt = await this.metricRecorder.stepExecution({
+        stepName: "mempool",
+        stepTimeoutMs: 1 * MIN,
+        fn: async ({ recordStepGas }) => {
+          const receipt = await txResponse.wait(1);
+          recordStepGas(unwrap(receipt.gasUsed));
+          return receipt;
+        },
+      }); // included in a block
+      this.legacy_metric_tx_latency.set({ stage: "mempool" }, this.metricRecorder.legacyGetLastStepLatecy());
+      this.legacy_metric_tx_gas.set({ type: "gas_used" }, Number(unwrap(txReceipt?.gasUsed)));
+      this.legacy_metric_tx_status.set(Number(unwrap(txReceipt?.status)));
 
-      const timeTotal = (Date.now() - timeStart) / 1000; // in seconds
-      this.metric_tx_latency_total.set(timeTotal);
+      this.metricRecorder.recordFlowSuccess();
+      this.legacy_metric_tx_latency_total.set(this.metricRecorder.legacyGetLastExecutionTotalLatency());
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       winston.error("simple tx error: " + error?.message, error?.stack);
+      this.metricRecorder.recordFlowFailure();
     } finally {
-      this.metric_tx_send_status.set(send_success);
-      this.metric_liveness.inc();
+      this.legacy_metric_tx_send_status.set(send_success);
+      this.legacy_metric_liveness.inc();
     }
   }
 
   public async run() {
     while (true) {
       await this.step();
-      // sleep 300sec
-      await new Promise((resolve) => setTimeout(resolve, SIMPLE_TX_INTERVAL));
+      //sleep
+      await new Promise((resolve) => setTimeout(resolve, this.intervalMs));
     }
   }
 }

@@ -7,7 +7,7 @@ import { Provider, Wallet } from "zksync-ethers";
 
 import { setupLogger } from "./logger";
 import { SimpleTxFlow } from "./transfer";
-import { unwrap } from "./utils";
+import { MIN, unwrap } from "./utils";
 
 const main = async () => {
   setupLogger(process.env.NODE_ENV, process.env.LOG_LEVEL);
@@ -17,7 +17,7 @@ const main = async () => {
   winston.info(
     `Wallet ${wallet.address} balance is ${ethers.formatEther(await l2Provider.getBalance(wallet.address))}`
   );
-  new SimpleTxFlow(l2Provider, wallet, paymasterAddress).run();
+  new SimpleTxFlow(l2Provider, wallet, paymasterAddress, 5 * MIN).run();
 };
 
 collectDefaultMetrics();
