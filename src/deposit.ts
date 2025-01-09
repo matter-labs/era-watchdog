@@ -3,7 +3,7 @@ import winston from "winston";
 import { utils } from "zksync-ethers";
 
 import { FlowMetricRecorder } from "./flowMetric";
-import { MIN, SEC } from "./utils";
+import { MIN, SEC, unwrap } from "./utils";
 
 import type { BigNumberish, BytesLike, Overrides } from "ethers";
 import type { types, Wallet } from "zksync-ethers";
@@ -89,7 +89,32 @@ export class DepositFlow {
     }
   }
 
+  private async getLastDepositTimestamp(): Promise<number> {
+    /// filter for deposit events from our wallet
+    const l1BridgeContracts = await this.wallet.getL1BridgeContracts();
+    const filter = l1BridgeContracts.shared.filters.BridgehubDepositBaseTokenInitiated(void 0, this.wallet.address);
+
+    // query only last 50k blocks to handle provider limits
+    const topBlock = await this.wallet._providerL1().getBlockNumber();
+    const events = await l1BridgeContracts.shared.queryFilter(filter, topBlock - 50 * 1000, topBlock);
+    events.sort((a, b) => b.blockNumber - a.blockNumber);
+    return events.length > 0 ? (await events[0].getBlock()).timestamp : 0;
+  }
+
   public async run() {
+    const lastDepositTimestamp = await this.getLastDepositTimestamp();
+    const currentBlockchainTimestamp = unwrap(
+      await this.wallet
+        ._providerL1()
+        .getBlock("latest")
+        .then((block) => block?.timestamp)
+    );
+    const timeSinceLastDeposit = currentBlockchainTimestamp - lastDepositTimestamp;
+    if (timeSinceLastDeposit < DEPOSIT_INTERVAL) {
+      const waitTime = DEPOSIT_INTERVAL - timeSinceLastDeposit;
+      winston.info(`Waiting ${waitTime} seconds before starting deposit flow`);
+      await new Promise((resolve) => setTimeout(resolve, waitTime * 1000));
+    }
     while (true) {
       await this.step();
       await new Promise((resolve) => setTimeout(resolve, DEPOSIT_INTERVAL));
