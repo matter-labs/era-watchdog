@@ -10,6 +10,8 @@ class FlowMetricStore {
   public metric_latency_total: Gauge;
   public metric_status: Gauge;
   public metric_step_gas: Gauge;
+  public metric_step_gas_price: Gauge;
+  public metric_step_gas_cost: Gauge;
 
   constructor() {
     this.metric_latency = new Gauge({
@@ -29,13 +31,25 @@ class FlowMetricStore {
       labelNames: ["flow", "step"],
     });
     this.metric_step_gas = new Gauge({
-      name: "watchdog_step_cost",
+      name: "watchdog_step_gas",
       help: "Watchdog step gas",
+      labelNames: ["flow", "step"],
+    });
+    this.metric_step_gas_price = new Gauge({
+      name: "watchdog_step_gas_price",
+      help: "Watchdog step gas price (either limit or actualy used)",
+      labelNames: ["flow", "step"],
+    });
+    this.metric_step_gas_cost = new Gauge({
+      name: "watchdog_step_gas_cost",
+      help: "Watchdog step gas cost (price * used)",
       labelNames: ["flow", "step"],
     });
   }
 }
 const store = new FlowMetricStore();
+
+type Numberish = number | bigint | string;
 
 export class FlowMetricRecorder {
   startTime: number | null = null;
@@ -65,12 +79,22 @@ export class FlowMetricRecorder {
   }: {
     stepName: string;
     stepTimeoutMs: number;
-    fn: (helpers: { recordStepGas: (gas: string | number | bigint) => void }) => Promise<T>;
+    fn: (helpers: {
+      recordStepGas: (gas: Numberish) => void;
+      recordStepGasPrice: (price: Numberish) => void;
+      recordStepGasCost: (cost: Numberish) => void;
+    }) => Promise<T>;
   }): Promise<T> {
     const start = Date.now();
     const helpers = {
-      recordStepGas: (gas: string | number | bigint) => {
+      recordStepGas: (gas: Numberish) => {
         store.metric_step_gas.set({ flow: this.flowName, step: stepName }, Number(gas));
+      },
+      recordStepGasPrice: (price: Numberish) => {
+        store.metric_step_gas_price.set({ flow: this.flowName, step: stepName }, Number(price));
+      },
+      recordStepGasCost: (cost: Numberish) => {
+        store.metric_step_gas_cost.set({ flow: this.flowName, step: stepName }, Number(cost));
       },
     };
     const ret = await withTimeout(fn(helpers), stepTimeoutMs, `step ${stepName}`);

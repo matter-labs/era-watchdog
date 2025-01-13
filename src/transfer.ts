@@ -109,9 +109,11 @@ export class SimpleTxFlow {
       const txReceipt = await this.metricRecorder.stepExecution({
         stepName: "mempool",
         stepTimeoutMs: 1 * MIN,
-        fn: async ({ recordStepGas }) => {
+        fn: async ({ recordStepGas, recordStepGasPrice, recordStepGasCost }) => {
           const receipt = await txResponse.wait(1);
           recordStepGas(unwrap(receipt.gasUsed));
+          recordStepGasPrice(unwrap(receipt.gasPrice));
+          recordStepGasCost(BigInt(unwrap(receipt.gasUsed)) * BigInt(unwrap(receipt.gasPrice)));
           return receipt;
         },
       }); // included in a block

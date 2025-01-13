@@ -1,14 +1,17 @@
 import "dotenv/config";
+import { MaxInt256, parseEther } from "ethers";
 import winston from "winston";
 import { utils } from "zksync-ethers";
+import { ETH_ADDRESS_IN_CONTRACTS } from "zksync-ethers/build/utils";
 
 import { FlowMetricRecorder } from "./flowMetric";
 import { MIN, SEC, unwrap } from "./utils";
 
 import type { BigNumberish, BytesLike, Overrides } from "ethers";
 import type { types, Wallet } from "zksync-ethers";
+import type { Address } from "zksync-ethers/build/types";
 
-const DEPOSIT_INTERVAL = 300000; // 300sec
+const DEPOSIT_INTERVAL = 60; // 300sec
 
 type DepositTxRequest = {
   token: types.Address;
@@ -25,6 +28,19 @@ type DepositTxRequest = {
   approveOverrides?: Overrides;
   approveBaseOverrides?: Overrides;
   customBridgeData?: BytesLike;
+};
+
+type L2Request = {
+  contractAddress: Address;
+  calldata: string;
+  l2GasLimit?: BigNumberish;
+  mintValue?: BigNumberish;
+  l2Value?: BigNumberish;
+  factoryDeps?: BytesLike[];
+  operatorTip?: BigNumberish;
+  gasPerPubdataByte?: BigNumberish;
+  refundRecipient?: Address;
+  overrides?: Overrides;
 };
 
 export class DepositFlow {
@@ -44,19 +60,41 @@ export class DepositFlow {
 
   protected async step() {
     try {
+      // even before flow start we check base token allowence and perform an infinitite approve if needed
+      const baseToken = await this.wallet.getBaseToken();
+      if (baseToken != ETH_ADDRESS_IN_CONTRACTS) {
+        const allowance = await this.wallet.getAllowanceL1(baseToken);
+
+        // heuristic condition to determine if we should perform the infinite approval
+        if (allowance < parseEther("100000")) {
+          winston.info(`Approving base token ${baseToken} for infinite amount`);
+          await this.wallet.approveERC20(baseToken, MaxInt256);
+        }
+      }
+
       this.metricRecorder.recordFlowStart();
 
-      const populated = this.getDepositRequest();
-
-      //TODO deposit price
-
-      //TODO populate transaction
+      const populated = await this.metricRecorder.stepExecution({
+        stepName: "populate_transaction",
+        stepTimeoutMs: 30 * SEC,
+        fn: async ({ recordStepGas }) => {
+          const populated: L2Request = await this.wallet.getDepositTx(this.getDepositRequest());
+          const estimatedGas = await this.wallet.estimateGasRequestExecute(populated);
+          recordStepGas(estimatedGas);
+          return {
+            ...populated,
+            overrides: {
+              gasLimit: estimatedGas,
+            },
+          };
+        },
+      });
 
       // send L1 deposit transaction
       const depositHandle = await this.metricRecorder.stepExecution({
         stepName: "send_transaction",
         stepTimeoutMs: 30 * SEC,
-        fn: () => this.wallet.deposit(populated),
+        fn: () => this.wallet.requestExecute(populated),
       });
       winston.info(`Deposit tx (L1: ${depositHandle.hash}) sent on L1`);
 
@@ -64,9 +102,15 @@ export class DepositFlow {
       const txReceipt = await this.metricRecorder.stepExecution({
         stepName: "l1_mempool",
         stepTimeoutMs: 3 * MIN,
-        fn: () => depositHandle.waitL1Commit(1),
+        fn: async ({ recordStepGas, recordStepGasPrice, recordStepGasCost }) => {
+          const txReceipt = await depositHandle.waitL1Commit(1);
+          recordStepGas(unwrap(txReceipt?.gasUsed));
+          recordStepGasPrice(unwrap(txReceipt?.gasPrice));
+          recordStepGasCost(unwrap(txReceipt?.gasUsed) * unwrap(txReceipt?.gasPrice));
+          return txReceipt;
+        },
       }); // included in a block on L1
-      //this.metric_gas.set({ type: "l1_gas_used" }, Number(unwrap(txReceipt?.gasUsed)));
+
       const l2TxHash = utils.getL2HashFromPriorityOp(
         txReceipt,
         await this.wallet._providerL2().getMainContractAddress()
@@ -78,7 +122,13 @@ export class DepositFlow {
       await this.metricRecorder.stepExecution({
         stepName: "l2_inclusion",
         stepTimeoutMs: 5 * MIN,
-        fn: () => depositHandle.wait(1),
+        fn: async ({ recordStepGas, recordStepGasCost }) => {
+          await depositHandle.wait(1);
+          // we l2 gas limit set as checking actual gas used does not make sense
+          recordStepGas(BigInt(unwrap(populated.l2GasLimit)));
+          // we used amount of minted tokens as a gas cost (minus transfered amount)
+          recordStepGasCost(BigInt(unwrap(populated.mintValue)) - BigInt(unwrap(populated.l2Value)));
+        },
       });
       winston.info(`deposit tx ${txHashs} mined on L2`);
 
@@ -113,11 +163,11 @@ export class DepositFlow {
     if (timeSinceLastDeposit < DEPOSIT_INTERVAL) {
       const waitTime = DEPOSIT_INTERVAL - timeSinceLastDeposit;
       winston.info(`Waiting ${waitTime} seconds before starting deposit flow`);
-      await new Promise((resolve) => setTimeout(resolve, waitTime * 1000));
+      await new Promise((resolve) => setTimeout(resolve, waitTime * SEC));
     }
     while (true) {
       await this.step();
-      await new Promise((resolve) => setTimeout(resolve, DEPOSIT_INTERVAL));
+      await new Promise((resolve) => setTimeout(resolve, DEPOSIT_INTERVAL * SEC));
     }
   }
 }
