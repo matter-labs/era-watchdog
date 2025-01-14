@@ -75,7 +75,7 @@ export class DepositFlow {
       this.metricRecorder.recordFlowStart();
 
       const populated = await this.metricRecorder.stepExecution({
-        stepName: "populate_transaction",
+        stepName: "estimation",
         stepTimeoutMs: 30 * SEC,
         fn: async ({ recordStepGas }) => {
           const populated: L2Request = await this.wallet.getDepositTx(this.getDepositRequest());
@@ -92,7 +92,7 @@ export class DepositFlow {
 
       // send L1 deposit transaction
       const depositHandle = await this.metricRecorder.stepExecution({
-        stepName: "send_transaction",
+        stepName: "send",
         stepTimeoutMs: 30 * SEC,
         fn: () => this.wallet.requestExecute(populated),
       });
@@ -100,7 +100,7 @@ export class DepositFlow {
 
       // wait for transaction
       const txReceipt = await this.metricRecorder.stepExecution({
-        stepName: "l1_mempool",
+        stepName: "l1_execution",
         stepTimeoutMs: 3 * MIN,
         fn: async ({ recordStepGas, recordStepGasPrice, recordStepGasCost }) => {
           const txReceipt = await depositHandle.waitL1Commit(1);
@@ -120,7 +120,7 @@ export class DepositFlow {
 
       // wait for deposit to be finalized
       await this.metricRecorder.stepExecution({
-        stepName: "l2_inclusion",
+        stepName: "l2_execution",
         stepTimeoutMs: 5 * MIN,
         fn: async ({ recordStepGas, recordStepGasCost }) => {
           await depositHandle.wait(1);
@@ -135,7 +135,8 @@ export class DepositFlow {
       this.metricRecorder.recordFlowSuccess();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
-      winston.error("simple tx error: " + error?.message, error?.stack);
+      winston.error("deposit tx error: " + error?.message, error?.stack);
+      this.metricRecorder.recordFlowFailure();
     }
   }
 
