@@ -11,8 +11,6 @@ import type { BigNumberish, BytesLike, Overrides } from "ethers";
 import type { types, Wallet } from "zksync-ethers";
 import type { Address } from "zksync-ethers/build/types";
 
-const DEPOSIT_INTERVAL = 60; // 300sec
-
 type DepositTxRequest = {
   token: types.Address;
   amount: BigNumberish;
@@ -46,7 +44,10 @@ type L2Request = {
 export class DepositFlow {
   private metricRecorder: FlowMetricRecorder;
 
-  constructor(private wallet: Wallet) {
+  constructor(
+    private wallet: Wallet,
+    private intervalMs: number
+  ) {
     this.metricRecorder = new FlowMetricRecorder("deposit");
   }
 
@@ -161,14 +162,15 @@ export class DepositFlow {
         .then((block) => block?.timestamp)
     );
     const timeSinceLastDeposit = currentBlockchainTimestamp - lastDepositTimestamp;
-    if (timeSinceLastDeposit < DEPOSIT_INTERVAL) {
-      const waitTime = DEPOSIT_INTERVAL - timeSinceLastDeposit;
+    if (timeSinceLastDeposit < this.intervalMs / SEC) {
+      //TODO consider recovering status of last deposit
+      const waitTime = this.intervalMs - timeSinceLastDeposit * SEC;
       winston.info(`Waiting ${waitTime} seconds before starting deposit flow`);
-      await new Promise((resolve) => setTimeout(resolve, waitTime * SEC));
+      await new Promise((resolve) => setTimeout(resolve, waitTime));
     }
     while (true) {
       await this.step();
-      await new Promise((resolve) => setTimeout(resolve, DEPOSIT_INTERVAL * SEC));
+      await new Promise((resolve) => setTimeout(resolve, this.intervalMs));
     }
   }
 }
