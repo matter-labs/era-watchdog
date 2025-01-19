@@ -3,6 +3,8 @@ import winston from "winston";
 
 import { unwrap, withTimeout } from "./utils";
 
+export type STATUS = "OK" | "FAIL";
+
 /// singleton for metric storage
 class FlowMetricStore {
   public metric_latency: Gauge;
@@ -125,5 +127,22 @@ export class FlowMetricRecorder {
     store.metric_status.set({ flow: this.flowName }, 0);
     this.startTime = null;
     winston.error(`[${this.flowName}] Flow failed`);
+  }
+
+  public recordPreviousExecutionStatus(status: STATUS) {
+    switch (status) {
+      case "OK": {
+        store.metric_status.set({ flow: this.flowName }, 1);
+        break;
+      }
+      case "FAIL": {
+        store.metric_status.set({ flow: this.flowName }, 0);
+        break;
+      }
+      default: {
+        const _: never = status;
+        throw new Error("Impossible: " + status);
+      }
+    }
   }
 }

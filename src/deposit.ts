@@ -7,6 +7,7 @@ import { ETH_ADDRESS_IN_CONTRACTS } from "zksync-ethers/build/utils";
 import { FlowMetricRecorder } from "./flowMetric";
 import { MIN, SEC, unwrap } from "./utils";
 
+import type { STATUS } from "./flowMetric";
 import type { BigNumberish, BytesLike, Overrides } from "ethers";
 import type { types, Wallet } from "zksync-ethers";
 import type { Address } from "zksync-ethers/build/types";
@@ -40,6 +41,8 @@ type L2Request = {
   refundRecipient?: Address;
   overrides?: Overrides;
 };
+
+const PRIORITY_OP_TIMEOUT = +(process.env.FLOW_DEPOSIT_L2_TIMEOUT ?? 15 * MIN);
 
 export class DepositFlow {
   private metricRecorder: FlowMetricRecorder;
@@ -122,7 +125,7 @@ export class DepositFlow {
       // wait for deposit to be finalized
       await this.metricRecorder.stepExecution({
         stepName: "l2_execution",
-        stepTimeoutMs: +(process.env.FLOW_DEPOSIT_L2_TIMEOUT ?? 15 * MIN),
+        stepTimeoutMs: PRIORITY_OP_TIMEOUT,
         fn: async ({ recordStepGas, recordStepGasCost }) => {
           await depositHandle.wait(1);
           // we l2 gas limit set as checking actual gas used does not make sense
@@ -141,7 +144,10 @@ export class DepositFlow {
     }
   }
 
-  private async getLastDepositTimestamp(): Promise<number> {
+  private async getLastExecution(): Promise<{
+    timestamp: number;
+    status: STATUS | null;
+  }> {
     /// filter for deposit events from our wallet
     const l1BridgeContracts = await this.wallet.getL1BridgeContracts();
     const filter = l1BridgeContracts.shared.filters.BridgehubDepositBaseTokenInitiated(void 0, this.wallet.address);
@@ -154,18 +160,42 @@ export class DepositFlow {
       topBlock
     );
     events.sort((a, b) => b.blockNumber - a.blockNumber);
-    return events.length > 0 ? (await events[0].getBlock()).timestamp : 0;
+    if (events.length === 0)
+      return {
+        timestamp: 0,
+        status: null,
+      };
+    const event = events[0];
+
+    const timestamp = (await event.getBlock()).timestamp;
+    const txReceipt = await event.getTransactionReceipt();
+    const l2TxHash = utils.getL2HashFromPriorityOp(txReceipt, await this.wallet._providerL2().getMainContractAddress());
+    winston.info(`[deposit] Previous deposit L2 TX hash ${l2TxHash}`);
+    const receipt = this.wallet._providerL2().waitForTransaction(l2TxHash, 1, PRIORITY_OP_TIMEOUT);
+    if (receipt == null) {
+      winston.error(`[deposit] Previous transaction not executed on l2: ${l2TxHash}`);
+      return {
+        timestamp,
+        status: "FAIL",
+      };
+    } else {
+      return {
+        timestamp,
+        status: "OK",
+      };
+    }
   }
 
   public async run() {
-    const lastDepositTimestamp = await this.getLastDepositTimestamp();
+    const lastExecution = await this.getLastExecution();
     const currentBlockchainTimestamp = unwrap(
       await this.wallet
         ._providerL1()
         .getBlock("latest")
         .then((block) => block?.timestamp)
     );
-    const timeSinceLastDeposit = currentBlockchainTimestamp - lastDepositTimestamp;
+    const timeSinceLastDeposit = currentBlockchainTimestamp - lastExecution.timestamp;
+    if (lastExecution.status != null) this.metricRecorder.recordPreviousExecutionStatus(lastExecution.status);
     if (timeSinceLastDeposit < this.intervalMs / SEC) {
       //TODO consider recovering status of last deposit
       const waitTime = this.intervalMs - timeSinceLastDeposit * SEC;
