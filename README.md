@@ -41,5 +41,7 @@ yarn run start
         - `FLOW_DEPOSIT_ENABLE` -- set to `1` to enable deposit flow
         - `CHAIN_L1_RPC_URL` -- l1 json-rpc endpoint
         - `FLOW_DEPOSIT_INTERVAL` -- deposit flow interval in ms
+        - `FLOW_DEPOSIT_L2_TIMEOUT` -- timeout of l2 deposit confirmation in ms
+        - `MAX_LOGS_BLOCKS` -- max number of blocks in range of `eth_getLogs` request
 
 - run the container

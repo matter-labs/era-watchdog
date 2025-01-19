@@ -122,7 +122,7 @@ export class DepositFlow {
       // wait for deposit to be finalized
       await this.metricRecorder.stepExecution({
         stepName: "l2_execution",
-        stepTimeoutMs: 5 * MIN,
+        stepTimeoutMs: +(process.env.FLOW_DEPOSIT_L2_TIMEOUT ?? 15 * MIN),
         fn: async ({ recordStepGas, recordStepGasCost }) => {
           await depositHandle.wait(1);
           // we l2 gas limit set as checking actual gas used does not make sense
@@ -148,7 +148,11 @@ export class DepositFlow {
 
     // query only last 50k blocks to handle provider limits
     const topBlock = await this.wallet._providerL1().getBlockNumber();
-    const events = await l1BridgeContracts.shared.queryFilter(filter, topBlock - 50 * 1000, topBlock);
+    const events = await l1BridgeContracts.shared.queryFilter(
+      filter,
+      topBlock - +(process.env.MAX_LOGS_BLOCKS ?? 50 * 1000),
+      topBlock
+    );
     events.sort((a, b) => b.blockNumber - a.blockNumber);
     return events.length > 0 ? (await events[0].getBlock()).timestamp : 0;
   }
@@ -165,7 +169,7 @@ export class DepositFlow {
     if (timeSinceLastDeposit < this.intervalMs / SEC) {
       //TODO consider recovering status of last deposit
       const waitTime = this.intervalMs - timeSinceLastDeposit * SEC;
-      winston.info(`Waiting ${waitTime} seconds before starting deposit flow`);
+      winston.info(`Waiting ${(waitTime / 1000).toFixed(0)} seconds before starting deposit flow`);
       await new Promise((resolve) => setTimeout(resolve, waitTime));
     }
     while (true) {
