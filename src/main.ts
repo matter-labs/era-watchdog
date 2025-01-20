@@ -19,8 +19,11 @@ const main = async () => {
   winston.info(
     `Wallet ${wallet.address} balance is ${ethers.formatEther(await l2Provider.getBalance(wallet.address))}`
   );
-  if (process.env.FLOW_TRANSFER_ENABLE === "1")
+  let enabledFlows = 0;
+  if (process.env.FLOW_TRANSFER_ENABLE === "1") {
     new SimpleTxFlow(l2Provider, wallet, paymasterAddress, +unwrap(process.env.FLOW_TRANSFER_INTERVAL)).run();
+    enabledFlows++;
+  }
 
   if (process.env.FLOW_DEPOSIT_ENABLE === "1") {
     const l1Provider = new Provider(unwrap(process.env.CHAIN_L1_RPC_URL));
@@ -29,6 +32,12 @@ const main = async () => {
       `Wallet ${walletDeposit.address} L1 balance is ${ethers.formatEther(await l1Provider.getBalance(walletDeposit.address))}`
     );
     new DepositFlow(walletDeposit, +unwrap(process.env.FLOW_DEPOSIT_INTERVAL)).run();
+    enabledFlows++;
+  }
+  winston.info(`Enabled ${enabledFlows} flows`);
+  if (enabledFlows === 0) {
+    winston.error("No flows enabled");
+    process.exit(1);
   }
 };
 
