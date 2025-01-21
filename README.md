@@ -34,5 +34,14 @@ yarn run start
     - `WALLET_KEY` -- watchdog wallet key (`0x` prefixed hex string)
     - `PAYMASTER_ADDRESS` -- set if transctions should use a paymaster
     - `METRICS_PORT` -- override of metrics port, defaults to 8080
+    - transfer flow:
+        - `FLOW_TRANSFER_ENABLE` -- set to `1` to enable transfer flow
+        - `FLOW_TRANSFER_INTERVAL` -- transfer flow interval in ms
+    - deposit flow:
+        - `FLOW_DEPOSIT_ENABLE` -- set to `1` to enable deposit flow
+        - `CHAIN_L1_RPC_URL` -- l1 json-rpc endpoint
+        - `FLOW_DEPOSIT_INTERVAL` -- deposit flow interval in ms
+        - `FLOW_DEPOSIT_L2_TIMEOUT` -- timeout of l2 deposit confirmation in ms
+        - `MAX_LOGS_BLOCKS` -- max number of blocks in range of `eth_getLogs` request
 
 - run the container

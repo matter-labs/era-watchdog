@@ -85,7 +85,7 @@ export class SimpleTxFlow {
       // populate transaction
       const tx = this.getTxRequest();
       const populated = await this.metricRecorder.stepExecution({
-        stepName: "populate_transaction",
+        stepName: "estimation",
         stepTimeoutMs: 10 * SEC,
         fn: async ({ recordStepGas }) => {
           const populated = await this.wallet.populateTransaction(tx);
@@ -98,7 +98,7 @@ export class SimpleTxFlow {
 
       // send transaction
       const txResponse = await this.metricRecorder.stepExecution({
-        stepName: "send_transaction",
+        stepName: "send",
         stepTimeoutMs: 10 * SEC,
         fn: () => this.wallet.sendTransaction(populated),
       });
@@ -107,11 +107,13 @@ export class SimpleTxFlow {
 
       // wait for transaction
       const txReceipt = await this.metricRecorder.stepExecution({
-        stepName: "mempool",
+        stepName: "execution",
         stepTimeoutMs: 1 * MIN,
-        fn: async ({ recordStepGas }) => {
+        fn: async ({ recordStepGas, recordStepGasPrice, recordStepGasCost }) => {
           const receipt = await txResponse.wait(1);
           recordStepGas(unwrap(receipt.gasUsed));
+          recordStepGasPrice(unwrap(receipt.gasPrice));
+          recordStepGasCost(BigInt(unwrap(receipt.gasUsed)) * BigInt(unwrap(receipt.gasPrice)));
           return receipt;
         },
       }); // included in a block

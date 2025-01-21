@@ -10,4 +10,10 @@ const compat = new FlatCompat({
   recommendedConfig: js.configs.recommended,
   allConfig: js.configs.all,
 });
-export default [...compat.extends("@matterlabs/eslint-config-typescript")];
+export default [
+  ...compat.extends("@matterlabs/eslint-config-typescript"),
+{
+  rules: {
+    '@typescript-eslint/no-unused-vars': ['error', { 'argsIgnorePattern': '^_', 'varsIgnorePattern': '^_' }]
+  }
+}];
