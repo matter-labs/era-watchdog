@@ -1,7 +1,7 @@
 import { Gauge } from "prom-client";
 import winston from "winston";
 
-import { unwrap, withTimeout } from "./utils";
+import { withTimeout } from "./utils";
 
 export type STATUS = "OK" | "FAIL";
 
@@ -62,16 +62,6 @@ export class FlowMetricRecorder {
   public recordFlowStart() {
     this.startTime = Date.now();
     winston.info(`[${this.flowName}] Flow started`);
-  }
-
-  /// function for getting last step latency, used for legacy compatibility
-  public legacyGetLastStepLatecy() {
-    return unwrap(this._lastStepLatency);
-  }
-
-  /// function for getting last execution total latency, used for legacy compatibility
-  public legacyGetLastExecutionTotalLatency() {
-    return unwrap(this._lastExecutionTotalLatency);
   }
 
   public async stepExecution<T>({
