@@ -1,5 +1,4 @@
 import "dotenv/config";
-import { Gauge } from "prom-client";
 import winston from "winston";
 import { utils } from "zksync-ethers";
 
@@ -9,7 +8,6 @@ import { MIN, SEC, unwrap } from "./utils";
 import type { types, Provider, Wallet } from "zksync-ethers";
 
 export class SimpleTxFlow {
-  private metric_gas_price: Gauge;
   private metricRecorder: FlowMetricRecorder;
 
   constructor(
@@ -19,7 +17,6 @@ export class SimpleTxFlow {
     private intervalMs: number
   ) {
     this.metricRecorder = new FlowMetricRecorder("transfer");
-    this.metric_gas_price = new Gauge({ name: "gas_price", help: "Gas price on L2" });
   }
 
   protected getTxRequest(): types.TransactionRequest {
@@ -48,18 +45,16 @@ export class SimpleTxFlow {
     try {
       this.metricRecorder.recordFlowStart();
 
-      // gas price metric
-      const maxFeePerGas = await this.provider.getFeeData().then((feeData) => feeData.gasPrice ?? feeData.maxFeePerGas);
-      this.metric_gas_price.set(Number(unwrap(maxFeePerGas)));
-
       // populate transaction
       const tx = this.getTxRequest();
       const populated = await this.metricRecorder.stepExecution({
         stepName: "estimation",
         stepTimeoutMs: 10 * SEC,
-        fn: async ({ recordStepGas }) => {
+        fn: async ({ recordStepGas, recordStepGasPrice, recordStepGasCost }) => {
           const populated = await this.wallet.populateTransaction(tx);
+          recordStepGasPrice(unwrap(populated.maxFeePerGas));
           recordStepGas(unwrap(populated.gasLimit));
+          recordStepGasCost(BigInt(unwrap(populated.gasLimit)) * BigInt(unwrap(populated.maxFeePerGas)));
           return populated;
         },
       });
