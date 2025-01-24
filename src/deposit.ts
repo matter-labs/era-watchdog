@@ -121,13 +121,13 @@ export class DepositFlow {
       );
       const txHashs = `(L1: ${depositHandle.hash}, L2: ${l2TxHash})`;
       winston.info(`Deposit tx ${txHashs} mined on l1`);
-
       // wait for deposit to be finalized
       await this.metricRecorder.stepExecution({
         stepName: "l2_execution",
         stepTimeoutMs: PRIORITY_OP_TIMEOUT,
         fn: async ({ recordStepGas, recordStepGasCost }) => {
           await depositHandle.wait(1);
+          // When performing a deposit
           // we l2 gas limit set as checking actual gas used does not make sense
           recordStepGas(BigInt(unwrap(populated.l2GasLimit)));
           // we used amount of minted tokens as a gas cost (minus transfered amount)
