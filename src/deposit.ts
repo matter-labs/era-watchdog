@@ -84,11 +84,13 @@ export class DepositFlow {
         fn: async ({ recordStepGas }) => {
           const populated: L2Request = await this.wallet.getDepositTx(this.getDepositRequest());
           const estimatedGas = await this.wallet.estimateGasRequestExecute(populated);
+          const nonce = await this.wallet._signerL1().getNonce("latest");
           recordStepGas(estimatedGas);
           return {
             ...populated,
             overrides: {
               gasLimit: estimatedGas,
+              nonce,
             },
           };
         },
