@@ -205,8 +205,9 @@ export class DepositFlow {
       await new Promise((resolve) => setTimeout(resolve, waitTime));
     }
     while (true) {
+      const nextExecutionWait = new Promise((resolve) => setTimeout(resolve, this.intervalMs));
       await this.step();
-      await new Promise((resolve) => setTimeout(resolve, this.intervalMs));
+      await nextExecutionWait;
     }
   }
 }

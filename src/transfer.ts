@@ -93,9 +93,10 @@ export class SimpleTxFlow {
 
   public async run() {
     while (true) {
+      const nextExecutionWait = new Promise((resolve) => setTimeout(resolve, this.intervalMs));
       await this.step();
       //sleep
-      await new Promise((resolve) => setTimeout(resolve, this.intervalMs));
+      await nextExecutionWait;
     }
   }
 }
