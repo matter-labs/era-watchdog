@@ -84,11 +84,13 @@ export class DepositFlow {
         fn: async ({ recordStepGas }) => {
           const populated: L2Request = await this.wallet.getDepositTx(this.getDepositRequest());
           const estimatedGas = await this.wallet.estimateGasRequestExecute(populated);
+          const nonce = await this.wallet._signerL1().getNonce("latest");
           recordStepGas(estimatedGas);
           return {
             ...populated,
             overrides: {
               gasLimit: estimatedGas,
+              nonce,
             },
           };
         },
@@ -171,14 +173,21 @@ export class DepositFlow {
     const txReceipt = await event.getTransactionReceipt();
     const l2TxHash = utils.getL2HashFromPriorityOp(txReceipt, await this.wallet._providerL2().getMainContractAddress());
     winston.info(`[deposit] Previous deposit L2 TX hash ${l2TxHash}`);
-    const receipt = this.wallet._providerL2().waitForTransaction(l2TxHash, 1, PRIORITY_OP_TIMEOUT);
+    const receipt = await this.wallet._providerL2().waitForTransaction(l2TxHash, 1, PRIORITY_OP_TIMEOUT);
     if (receipt == null) {
       winston.error(`[deposit] Previous transaction not executed on l2: ${l2TxHash}`);
       return {
         timestamp,
         status: "FAIL",
       };
+    } else if (receipt.status != 1) {
+      winston.error(`[deposit] Previous transaction failed on l2: ${l2TxHash}`);
+      return {
+        timestamp,
+        status: "FAIL",
+      };
     } else {
+      winston.info(`[deposit] Previous transaction executed on l2: ${l2TxHash}`);
       return {
         timestamp,
         status: "OK",
@@ -203,8 +212,9 @@ export class DepositFlow {
       await new Promise((resolve) => setTimeout(resolve, waitTime));
     }
     while (true) {
+      const nextExecutionWait = new Promise((resolve) => setTimeout(resolve, this.intervalMs));
       await this.step();
-      await new Promise((resolve) => setTimeout(resolve, this.intervalMs));
+      await nextExecutionWait;
     }
   }
 }

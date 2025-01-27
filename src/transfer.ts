@@ -51,7 +51,11 @@ export class SimpleTxFlow {
         stepName: "estimation",
         stepTimeoutMs: 10 * SEC,
         fn: async ({ recordStepGas, recordStepGasPrice, recordStepGasCost }) => {
-          const populated = await this.wallet.populateTransaction(tx);
+          const latestNonce = await this.wallet.getNonce("latest");
+          const populated = await this.wallet.populateTransaction({
+            ...tx,
+            nonce: latestNonce,
+          });
           recordStepGasPrice(unwrap(populated.maxFeePerGas));
           recordStepGas(unwrap(populated.gasLimit));
           recordStepGasCost(BigInt(unwrap(populated.gasLimit)) * BigInt(unwrap(populated.maxFeePerGas)));
@@ -89,9 +93,10 @@ export class SimpleTxFlow {
 
   public async run() {
     while (true) {
+      const nextExecutionWait = new Promise((resolve) => setTimeout(resolve, this.intervalMs));
       await this.step();
       //sleep
-      await new Promise((resolve) => setTimeout(resolve, this.intervalMs));
+      await nextExecutionWait;
     }
   }
 }
