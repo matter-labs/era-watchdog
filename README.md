@@ -37,6 +37,7 @@ yarn run start
     - transfer flow:
         - `FLOW_TRANSFER_ENABLE` -- set to `1` to enable transfer flow
         - `FLOW_TRANSFER_INTERVAL` -- transfer flow interval in ms
+        - `L2_GAS_PRICE_MULTIPLIER` -- maxFeePerGas multiplier (may be used for other L2 operations, may have 6 decimal places)
     - deposit flow:
         - `FLOW_DEPOSIT_ENABLE` -- set to `1` to enable deposit flow
         - `CHAIN_L1_RPC_URL` -- l1 json-rpc endpoint

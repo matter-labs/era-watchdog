@@ -9,14 +9,21 @@ import type { types, Provider, Wallet } from "zksync-ethers";
 
 export class SimpleTxFlow {
   private metricRecorder: FlowMetricRecorder;
+  private gasPriceMultiplier: number = 1;
 
   constructor(
-    private provider: Provider,
+    private _provider: Provider,
     private wallet: Wallet,
     private paymasterAddress: string | undefined,
     private intervalMs: number
   ) {
     this.metricRecorder = new FlowMetricRecorder("transfer");
+    if (process.env.L2_GAS_PRICE_MULTIPLIER != null) {
+      this.gasPriceMultiplier = parseFloat(unwrap(process.env.L2_GAS_PRICE_MULTIPLIER));
+      if (!(isFinite(this.gasPriceMultiplier) && this.gasPriceMultiplier > 0)) {
+        throw new Error("Invalid L2_GAS_PRICE_MULTIPLIER");
+      }
+    }
   }
 
   protected getTxRequest(): types.TransactionRequest {
@@ -59,6 +66,8 @@ export class SimpleTxFlow {
           recordStepGasPrice(unwrap(populated.maxFeePerGas));
           recordStepGas(unwrap(populated.gasLimit));
           recordStepGasCost(BigInt(unwrap(populated.gasLimit)) * BigInt(unwrap(populated.maxFeePerGas)));
+          populated.maxFeePerGas =
+            (BigInt(unwrap(populated.maxFeePerGas)) * BigInt(this.gasPriceMultiplier * 1000000)) / 1000000n; // use a fractional hack-in floats with bigint multiplication
           return populated;
         },
       });
