@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { MaxInt256, parseEther } from "ethers";
+import { formatEther, MaxInt256, parseEther } from "ethers";
 import winston from "winston";
 import { utils } from "zksync-ethers";
 import { ETH_ADDRESS_IN_CONTRACTS } from "zksync-ethers/build/utils";
@@ -46,6 +46,7 @@ const PRIORITY_OP_TIMEOUT = +(process.env.FLOW_DEPOSIT_L2_TIMEOUT ?? 15 * MIN);
 
 export class DepositFlow {
   private metricRecorder: FlowMetricRecorder;
+  private baseToken: string | null = null;
 
   constructor(
     private wallet: Wallet,
@@ -57,28 +58,33 @@ export class DepositFlow {
   protected getDepositRequest(): DepositTxRequest {
     return {
       to: this.wallet.address,
-      token: utils.ETH_ADDRESS,
+      token: unwrap(this.baseToken),
       amount: 1, // just 1 wei
+      refundRecipient: this.wallet.address,
     };
   }
 
   protected async step() {
+    const baseToken = unwrap(this.baseToken);
     try {
       // even before flow start we check base token allowence and perform an infinitite approve if needed
-      const baseToken = await this.wallet.getBaseToken();
-      if (baseToken != ETH_ADDRESS_IN_CONTRACTS) {
+      if (this.baseToken != ETH_ADDRESS_IN_CONTRACTS) {
         const allowance = await this.wallet.getAllowanceL1(baseToken);
 
         // heuristic condition to determine if we should perform the infinite approval
         if (allowance < parseEther("100000")) {
-          winston.info(`Approving base token ${baseToken} for infinite amount`);
+          winston.info(`[deposit] Approving base token ${baseToken} for infinite amount`);
           await this.wallet.approveERC20(baseToken, MaxInt256);
+        } else {
+          winston.info(`[deposit] Base token ${baseToken} already has approval`);
         }
+        const balance = await this.wallet.getBalanceL1(baseToken);
+        winston.info(`[deposit] Base token ${baseToken} balance: ${formatEther(balance.toString())}`);
       }
 
       this.metricRecorder.recordFlowStart();
 
-      const populated = await this.metricRecorder.stepExecution({
+      const populatedWithOverrides = await this.metricRecorder.stepExecution({
         stepName: "estimation",
         stepTimeoutMs: 30 * SEC,
         fn: async ({ recordStepGas }) => {
@@ -100,9 +106,9 @@ export class DepositFlow {
       const depositHandle = await this.metricRecorder.stepExecution({
         stepName: "send",
         stepTimeoutMs: 30 * SEC,
-        fn: () => this.wallet.requestExecute(populated),
+        fn: () => this.wallet.requestExecute(populatedWithOverrides),
       });
-      winston.info(`Deposit tx (L1: ${depositHandle.hash}) sent on L1`);
+      winston.info(`[deposit] Tx (L1: ${depositHandle.hash}) sent on L1`);
 
       // wait for transaction
       const txReceipt = await this.metricRecorder.stepExecution({
@@ -122,7 +128,7 @@ export class DepositFlow {
         await this.wallet._providerL2().getMainContractAddress()
       );
       const txHashs = `(L1: ${depositHandle.hash}, L2: ${l2TxHash})`;
-      winston.info(`Deposit tx ${txHashs} mined on l1`);
+      winston.info(`[deposit] Tx ${txHashs} mined on l1`);
       // wait for deposit to be finalized
       await this.metricRecorder.stepExecution({
         stepName: "l2_execution",
@@ -131,12 +137,14 @@ export class DepositFlow {
           await depositHandle.wait(1);
           // When performing a deposit
           // we l2 gas limit set as checking actual gas used does not make sense
-          recordStepGas(BigInt(unwrap(populated.l2GasLimit)));
+          recordStepGas(BigInt(unwrap(populatedWithOverrides.l2GasLimit)));
           // we used amount of minted tokens as a gas cost (minus transfered amount)
-          recordStepGasCost(BigInt(unwrap(populated.mintValue)) - BigInt(unwrap(populated.l2Value)));
+          recordStepGasCost(
+            BigInt(unwrap(populatedWithOverrides.mintValue)) - BigInt(unwrap(populatedWithOverrides.l2Value))
+          );
         },
       });
-      winston.info(`deposit tx ${txHashs} mined on L2`);
+      winston.info(`[deposit] Tx ${txHashs} mined on L2`);
 
       this.metricRecorder.recordFlowSuccess();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -197,6 +205,7 @@ export class DepositFlow {
 
   public async run() {
     const lastExecution = await this.getLastExecution();
+    this.baseToken = await this.wallet.getBaseToken();
     const currentBlockchainTimestamp = unwrap(
       await this.wallet
         ._providerL1()
