@@ -5,10 +5,17 @@ import winston from "winston";
 import { utils } from "zksync-ethers";
 import { ETH_ADDRESS_IN_CONTRACTS } from "zksync-ethers/build/utils";
 
-import { DepositBaseFlow, PRIORITY_OP_TIMEOUT, STEPS } from "./depositBase";
+import {
+  DEPOSIT_RETRY_INTERVAL,
+  DEPOSIT_RETRY_LIMIT,
+  DepositBaseFlow,
+  PRIORITY_OP_TIMEOUT,
+  STEPS,
+} from "./depositBase";
 import { FlowMetricRecorder } from "./flowMetric";
-import { SEC, MIN, unwrap } from "./utils";
+import { SEC, MIN, unwrap, timeoutPromise } from "./utils";
 
+import type { STATUS } from "./flowMetric";
 import type { BigNumberish, BytesLike, Overrides } from "ethers";
 import type { Wallet } from "zksync-ethers";
 import type { IL1ERC20Bridge, IL1SharedBridge } from "zksync-ethers/build/typechain";
@@ -46,7 +53,7 @@ export class DepositFlow extends DepositBaseFlow {
     this.metricRecorder = new FlowMetricRecorder(FLOW_NAME);
   }
 
-  protected async executeWatchdogDeposit(metricRecorder: FlowMetricRecorder) {
+  protected async executeWatchdogDeposit(metricRecorder: FlowMetricRecorder): Promise<STATUS> {
     try {
       // even before flow start we check base token allowence and perform an infinitite approve if needed
       if (this.baseToken != ETH_ADDRESS_IN_CONTRACTS) {
@@ -128,10 +135,12 @@ export class DepositFlow extends DepositBaseFlow {
       winston.info(`[deposit] Tx ${txHashs} mined on L2`);
 
       metricRecorder.recordFlowSuccess();
+      return "OK";
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       winston.error("deposit tx error: " + error?.message, error?.stack);
       metricRecorder.recordFlowFailure();
+      return "FAIL";
     }
   }
 
@@ -148,8 +157,13 @@ export class DepositFlow extends DepositBaseFlow {
         await new Promise((resolve) => setTimeout(resolve, waitTime));
       }
       while (true) {
-        const nextExecutionWait = new Promise((resolve) => setTimeout(resolve, this.intervalMs));
-        await this.executeWatchdogDeposit(this.metricRecorder);
+        const nextExecutionWait = timeoutPromise(this.intervalMs);
+        for (let i = 0; i < DEPOSIT_RETRY_LIMIT; i++) {
+          const result = await this.executeWatchdogDeposit(this.metricRecorder);
+          if (result === "FAIL") {
+            await timeoutPromise(DEPOSIT_RETRY_INTERVAL);
+          } else break;
+        }
         await nextExecutionWait;
       }
     }

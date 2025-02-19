@@ -26,15 +26,15 @@ type DepositTxRequest = {
   customBridgeData?: BytesLike;
 };
 
-export type ExecutionResult =
-  | { status: null; timestampL1: 0 }
-  | {
-      l1Receipt: TransactionReceipt;
-      timestampL1: number;
-      l2Receipt?: TransactionReceipt;
-      timestampL2?: number;
-      status: STATUS;
-    };
+export type ExecutionResultUnknown = { status: null; timestampL1: 0 };
+export type ExecutionResultKnown = {
+  l1Receipt: TransactionReceipt;
+  timestampL1: number;
+  l2Receipt?: TransactionReceipt;
+  timestampL2?: number;
+  status: STATUS;
+};
+export type ExecutionResult = ExecutionResultUnknown | ExecutionResultKnown;
 
 export const STEPS = {
   estimation: "estimation",
@@ -44,6 +44,8 @@ export const STEPS = {
 };
 
 export const PRIORITY_OP_TIMEOUT = +(process.env.FLOW_DEPOSIT_L2_TIMEOUT ?? 15 * MIN);
+export const DEPOSIT_RETRY_INTERVAL = +(process.env.FLOW_DEPOSIT_RETRY_INTERVAL ?? 5 * MIN);
+export const DEPOSIT_RETRY_LIMIT = +(process.env.DEPOSIT_RETRY_LIMIT ?? 3);
 
 export abstract class DepositBaseFlow {
   constructor(
