@@ -43,5 +43,10 @@ yarn run start
         - `FLOW_DEPOSIT_INTERVAL` -- deposit flow interval in ms
         - `FLOW_DEPOSIT_L2_TIMEOUT` -- timeout of l2 deposit confirmation in ms
         - `MAX_LOGS_BLOCKS` -- max number of blocks in range of `eth_getLogs` request
+    - deposit user flow: (observes onchain transaction and performs deposit if no transaction is detected for certain time)
+        - `FLOW_DEPOSIT_USER_ENABLE` -- set to `1` to enable deposit user flow
+        - `FLOW_DEPOSIT_USER_INTERVAL` -- deposit user flow interval in ms (frequency of quaring latest deposit)
+        - `FLOW_DEPOSIT_USER_TX_TRIGGER_DELAY` -- delay in ms after which deposit user flow will trigger deposit transaction from watchdog wallet
+        - `FLOW_DEPOSIT_L2_TIMEOUT` & `MAX_LOGS_BLOCKS` shared with deposit flow
 
 - run the container

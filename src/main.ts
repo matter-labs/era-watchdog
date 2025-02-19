@@ -6,6 +6,7 @@ import winston from "winston";
 import { Provider, Wallet } from "zksync-ethers";
 
 import { DepositFlow } from "./deposit";
+import { DepositUserFlow } from "./depositUsers";
 import { setupLogger } from "./logger";
 import { SimpleTxFlow } from "./transfer";
 import { unwrap } from "./utils";
@@ -17,7 +18,7 @@ const main = async () => {
   const paymasterAddress = process.env.PAYMASTER_ADDRESS;
 
   winston.info(
-    `Wallet ${wallet.address} balance is ${ethers.formatEther(await l2Provider.getBalance(wallet.address))}`
+    `Wallet ${wallet.address} L2 balance is ${ethers.formatEther(await l2Provider.getBalance(wallet.address))}`
   );
   let enabledFlows = 0;
   if (process.env.FLOW_TRANSFER_ENABLE === "1") {
@@ -25,14 +26,36 @@ const main = async () => {
     enabledFlows++;
   }
 
-  if (process.env.FLOW_DEPOSIT_ENABLE === "1") {
+  if (process.env.FLOW_DEPOSIT_ENABLE === "1" || process.env.FLOW_DEPOSIT_USER_ENABLE === "1") {
     const l1Provider = new Provider(unwrap(process.env.CHAIN_L1_RPC_URL));
     const walletDeposit = new Wallet(unwrap(process.env.WALLET_KEY), l2Provider, l1Provider);
+    const l1BridgeContracts = await walletDeposit.getL1BridgeContracts();
+    const chainId = (await walletDeposit.provider.getNetwork()).chainId;
+    const baseToken = await walletDeposit.getBaseToken();
     winston.info(
       `Wallet ${walletDeposit.address} L1 balance is ${ethers.formatEther(await l1Provider.getBalance(walletDeposit.address))}`
     );
-    new DepositFlow(walletDeposit, +unwrap(process.env.FLOW_DEPOSIT_INTERVAL)).run();
-    enabledFlows++;
+    if (process.env.FLOW_DEPOSIT_ENABLE === "1") {
+      new DepositFlow(
+        walletDeposit,
+        l1BridgeContracts,
+        chainId,
+        baseToken,
+        +unwrap(process.env.FLOW_DEPOSIT_INTERVAL)
+      ).run();
+      enabledFlows++;
+    }
+    if (process.env.FLOW_DEPOSIT_USER_ENABLE === "1") {
+      new DepositUserFlow(
+        walletDeposit,
+        l1BridgeContracts,
+        chainId,
+        baseToken,
+        +unwrap(process.env.FLOW_DEPOSIT_USER_INTERVAL),
+        +unwrap(process.env.FLOW_DEPOSIT_USER_TX_TRIGGER_DELAY)
+      ).run();
+      enabledFlows++;
+    }
   }
   winston.info(`Enabled ${enabledFlows} flows`);
   if (enabledFlows === 0) {
