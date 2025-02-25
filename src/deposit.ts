@@ -53,7 +53,7 @@ export class DepositFlow extends DepositBaseFlow {
     this.metricRecorder = new FlowMetricRecorder(FLOW_NAME);
   }
 
-  protected async executeWatchdogDeposit(metricRecorder: FlowMetricRecorder): Promise<STATUS> {
+  protected async executeWatchdogDeposit(): Promise<STATUS> {
     try {
       // even before flow start we check base token allowence and perform an infinitite approve if needed
       if (this.baseToken != ETH_ADDRESS_IN_CONTRACTS) {
@@ -70,9 +70,9 @@ export class DepositFlow extends DepositBaseFlow {
         winston.info(`[deposit] Base token ${this.baseToken} balance: ${formatEther(balance.toString())}`);
       }
 
-      metricRecorder.recordFlowStart();
+      this.metricRecorder.recordFlowStart();
 
-      const populatedWithOverrides = await metricRecorder.stepExecution({
+      const populatedWithOverrides = await this.metricRecorder.stepExecution({
         stepName: STEPS.estimation,
         stepTimeoutMs: 30 * SEC,
         fn: async ({ recordStepGas }) => {
@@ -91,7 +91,7 @@ export class DepositFlow extends DepositBaseFlow {
       });
 
       // send L1 deposit transaction
-      const depositHandle = await metricRecorder.stepExecution({
+      const depositHandle = await this.metricRecorder.stepExecution({
         stepName: STEPS.send,
         stepTimeoutMs: 30 * SEC,
         fn: () => this.wallet.requestExecute(populatedWithOverrides),
@@ -99,7 +99,7 @@ export class DepositFlow extends DepositBaseFlow {
       winston.info(`[deposit] Tx (L1: ${depositHandle.hash}) sent on L1`);
 
       // wait for transaction
-      const txReceipt = await metricRecorder.stepExecution({
+      const txReceipt = await this.metricRecorder.stepExecution({
         stepName: STEPS.l1_execution,
         stepTimeoutMs: 3 * MIN,
         fn: async ({ recordStepGas, recordStepGasPrice, recordStepGasCost }) => {
@@ -118,7 +118,7 @@ export class DepositFlow extends DepositBaseFlow {
       const txHashs = `(L1: ${depositHandle.hash}, L2: ${l2TxHash})`;
       winston.info(`[deposit] Tx ${txHashs} mined on l1`);
       // wait for deposit to be finalized
-      await metricRecorder.stepExecution({
+      await this.metricRecorder.stepExecution({
         stepName: STEPS.l2_execution,
         stepTimeoutMs: PRIORITY_OP_TIMEOUT,
         fn: async ({ recordStepGas, recordStepGasCost }) => {
@@ -134,38 +134,35 @@ export class DepositFlow extends DepositBaseFlow {
       });
       winston.info(`[deposit] Tx ${txHashs} mined on L2`);
 
-      metricRecorder.recordFlowSuccess();
+      this.metricRecorder.recordFlowSuccess();
       return "OK";
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       winston.error("deposit tx error: " + error?.message, error?.stack);
-      metricRecorder.recordFlowFailure();
+      this.metricRecorder.recordFlowFailure();
       return "FAIL";
     }
   }
 
   public async run() {
+    const lastExecution = await this.getLastExecution(this.wallet.address);
+    const currentBlockchainTimestamp = await this.getCurrentChainTimestamp();
+    const timeSinceLastDepositSec = currentBlockchainTimestamp - lastExecution.timestampL1;
+    if (lastExecution.status != null) this.metricRecorder.recordPreviousExecutionStatus(lastExecution.status!);
+    if (timeSinceLastDepositSec < this.intervalMs / SEC) {
+      const waitTime = this.intervalMs - timeSinceLastDepositSec * SEC;
+      winston.info(`Waiting ${(waitTime / 1000).toFixed(0)} seconds before starting deposit flow`);
+      await timeoutPromise(waitTime);
+    }
     while (true) {
-      const lastExecution = await this.getLastExecution(this.wallet.address);
-      const currentBlockchainTimestamp = await this.getCurrentChainTimestamp();
-      const timeSinceLastDeposit = currentBlockchainTimestamp - lastExecution.timestampL1;
-      if (lastExecution.status != null) this.metricRecorder.recordPreviousExecutionStatus(lastExecution.status!);
-      if (timeSinceLastDeposit < this.intervalMs / SEC) {
-        //TODO consider recovering status of last deposit
-        const waitTime = this.intervalMs - timeSinceLastDeposit * SEC;
-        winston.info(`Waiting ${(waitTime / 1000).toFixed(0)} seconds before starting deposit flow`);
-        await new Promise((resolve) => setTimeout(resolve, waitTime));
+      const nextExecutionWait = timeoutPromise(this.intervalMs);
+      for (let i = 0; i < DEPOSIT_RETRY_LIMIT; i++) {
+        const result = await this.executeWatchdogDeposit();
+        if (result === "FAIL") {
+          await timeoutPromise(DEPOSIT_RETRY_INTERVAL);
+        } else break;
       }
-      while (true) {
-        const nextExecutionWait = timeoutPromise(this.intervalMs);
-        for (let i = 0; i < DEPOSIT_RETRY_LIMIT; i++) {
-          const result = await this.executeWatchdogDeposit(this.metricRecorder);
-          if (result === "FAIL") {
-            await timeoutPromise(DEPOSIT_RETRY_INTERVAL);
-          } else break;
-        }
-        await nextExecutionWait;
-      }
+      await nextExecutionWait;
     }
   }
 }
