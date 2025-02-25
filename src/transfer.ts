@@ -3,7 +3,7 @@ import winston from "winston";
 import { utils } from "zksync-ethers";
 
 import { FlowMetricRecorder } from "./flowMetric";
-import { MIN, SEC, unwrap } from "./utils";
+import { MIN, SEC, timeoutPromise, unwrap } from "./utils";
 
 import type { types, Provider, Wallet } from "zksync-ethers";
 
@@ -93,7 +93,7 @@ export class SimpleTxFlow {
 
   public async run() {
     while (true) {
-      const nextExecutionWait = new Promise((resolve) => setTimeout(resolve, this.intervalMs));
+      const nextExecutionWait = timeoutPromise(this.intervalMs);
       await this.step();
       //sleep
       await nextExecutionWait;

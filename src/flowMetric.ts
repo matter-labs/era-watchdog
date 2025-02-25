@@ -119,6 +119,35 @@ export class FlowMetricRecorder {
     winston.error(`[${this.flowName}] Flow failed`);
   }
 
+  /// MANUAL FUNCTIONS
+  /// Needed for recording based solly on onchain data
+  public manualRecordStatus(status: STATUS, latencyTotalSec: number) {
+    store.metric_status.set({ flow: this.flowName }, status === "OK" ? 1 : 0);
+    if (status === "OK") {
+      store.metric_latency_total.set({ flow: this.flowName }, latencyTotalSec);
+      this._lastExecutionTotalLatency = latencyTotalSec;
+    }
+  }
+
+  public manualRecordStepCompletion(stepName: string, latencySec: number, stepEndSec: number) {
+    store.metric_latency.set({ flow: this.flowName, stage: stepName }, latencySec);
+    this._lastStepLatency = latencySec;
+    store.metric_step_timestamp.set({ flow: this.flowName, step: stepName }, stepEndSec * 1000);
+    winston.info(`[${this.flowName}] Step ${stepName} took ${latencySec} seconds`);
+  }
+
+  public manualRecordStepGas(stepName: string, gas: Numberish) {
+    store.metric_step_gas.set({ flow: this.flowName, step: stepName }, Number(gas));
+  }
+
+  public manualRecordStepGasPrice(stepName: string, price: Numberish) {
+    store.metric_step_gas_price.set({ flow: this.flowName, step: stepName }, Number(price));
+  }
+
+  public manualRecordStepGasCost(stepName: string, cost: Numberish) {
+    store.metric_step_gas_cost.set({ flow: this.flowName, step: stepName }, Number(cost));
+  }
+
   public recordPreviousExecutionStatus(status: STATUS) {
     switch (status) {
       case "OK": {

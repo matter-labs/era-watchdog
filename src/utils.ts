@@ -29,5 +29,9 @@ export const withTimeout = <T>(promise: Promise<T>, timeoutMs: number, context?:
   });
 };
 
+export const timeoutPromise = (ms: number): Promise<void> => {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+};
+
 export const SEC = 1000;
 export const MIN = 60 * SEC;
