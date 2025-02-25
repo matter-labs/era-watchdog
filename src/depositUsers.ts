@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { Gauge } from "prom-client";
 import winston from "winston";
 import { utils } from "zksync-ethers";
 
@@ -15,6 +16,7 @@ const FLOW_NAME = "depositUser";
 export class DepositUserFlow extends DepositBaseFlow {
   private metricRecorder: FlowMetricRecorder;
   private lastOnChainOperaionTimestamp: number = 0;
+  private metricTimeSinceLastDeposit: Gauge;
 
   constructor(
     wallet: Wallet,
@@ -30,15 +32,19 @@ export class DepositUserFlow extends DepositBaseFlow {
   ) {
     super(wallet, l1BridgeContracts, chainId, baseToken, FLOW_NAME);
     this.metricRecorder = new FlowMetricRecorder(FLOW_NAME);
+    this.metricTimeSinceLastDeposit = new Gauge({
+      name: "watchdog_time_since_last_deposit",
+      help: "Blockchain second since last deposit transaction on L1",
+    });
   }
 
   private recordDepositResult(result: ExecutionResultKnown) {
     if (result.status === "OK") {
       this.metricRecorder.manualRecordStatus(result.status, unwrap(result.timestampL2) - result.timestampL1);
       this.metricRecorder.manualRecordStepCompletion(
-        "l2_execution",
-        unwrap(result.timestampL2) - result.timestampL1,
-        unwrap(result.timestampL2)
+        STEPS.l1_execution,
+        0, // not latency for L1 available
+        result.timestampL1
       );
       this.metricRecorder.manualRecordStepGas(STEPS.l1_execution, result.l1Receipt.gasUsed);
       this.metricRecorder.manualRecordStepGasPrice(STEPS.l1_execution, result.l1Receipt.gasPrice);
@@ -46,12 +52,18 @@ export class DepositUserFlow extends DepositBaseFlow {
         STEPS.l1_execution,
         result.l1Receipt.gasUsed * result.l1Receipt.gasPrice
       );
+      this.metricRecorder.manualRecordStepCompletion(
+        STEPS.l2_execution,
+        unwrap(result.timestampL2) - result.timestampL1,
+        unwrap(result.timestampL2)
+      );
       this.metricRecorder.manualRecordStepGas(STEPS.l2_execution, unwrap(result.l2Receipt).gasUsed);
       this.metricRecorder.manualRecordStepGasPrice(STEPS.l2_execution, unwrap(result.l2Receipt).gasPrice);
       this.metricRecorder.manualRecordStepGasCost(
         STEPS.l2_execution,
         unwrap(result.l2Receipt).gasUsed * unwrap(result.l2Receipt).gasPrice
       );
+      this.metricTimeSinceLastDeposit.set(result.secSinceL1Deposit);
     } else if (result.status === "FAIL") {
       this.metricRecorder.manualRecordStatus(result.status, 0);
     } else {
@@ -75,7 +87,7 @@ export class DepositUserFlow extends DepositBaseFlow {
       winston.info("[depositUser] Deposit transaction mined on L2. Checking status...");
       const watchdogTxResult = await this.getLastExecution(this.wallet.address);
       if (watchdogTxResult.status == null) {
-        throw new Error(`Just executed deposit not found ${watchdogTxResult}`);
+        throw new Error(`Just executed deposit not found ${JSON.stringify(watchdogTxResult)}`);
       }
       this.recordDepositResult(watchdogTxResult);
       return watchdogTxResult.status;

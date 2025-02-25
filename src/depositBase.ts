@@ -28,6 +28,7 @@ type DepositTxRequest = {
 
 export type ExecutionResultUnknown = { status: null; timestampL1: 0 };
 export type ExecutionResultKnown = {
+  secSinceL1Deposit: number;
   l1Receipt: TransactionReceipt;
   timestampL1: number;
   l2Receipt?: TransactionReceipt;
@@ -89,22 +90,26 @@ export abstract class DepositBaseFlow {
     const timestampL1 = (await event.getBlock()).timestamp;
     const l1Receipt = await event.getTransactionReceipt();
     const l2TxHash = utils.getL2HashFromPriorityOp(l1Receipt, await this.wallet._providerL2().getMainContractAddress());
+    const secSinceL1Deposit = blockchainTime - timestampL1;
     winston.info(
-      `[${this.flowName}] Found deposit ${event.transactionHash} at ${new Date(timestampL1 * 1000).toUTCString()}, ${blockchainTime - timestampL1} seconds ago, expecting L2 TX hash ${l2TxHash}`
+      `[${this.flowName}] Found deposit ${event.transactionHash} at ${new Date(timestampL1 * 1000).toUTCString()}, ${secSinceL1Deposit} seconds ago, expecting L2 TX hash ${l2TxHash}`
     );
     const l2Receipt = await this.wallet._providerL2().waitForTransaction(l2TxHash, 1, PRIORITY_OP_TIMEOUT);
+    const l1Res = {
+      secSinceL1Deposit,
+      l1Receipt,
+      timestampL1,
+    };
     if (l2Receipt == null) {
       winston.error(`[${this.flowName}] ${event.transactionHash} not executed on l2: ${l2TxHash}`);
       return {
-        l1Receipt,
-        timestampL1: timestampL1,
+        ...l1Res,
         status: "FAIL",
       };
     } else if (l2Receipt.status != 1) {
       winston.error(`[${this.flowName}] ${event.transactionHash} failed on l2: ${l2TxHash}`);
       return {
-        l1Receipt,
-        timestampL1: timestampL1,
+        ...l1Res,
         status: "FAIL",
       };
     } else {
@@ -113,8 +118,7 @@ export abstract class DepositBaseFlow {
         `[${this.flowName}] ${event.transactionHash} executed successfully on l2: ${l2TxHash} at ${new Date(timestampL2 * 1000).toUTCString()}`
       );
       return {
-        l1Receipt,
-        timestampL1,
+        ...l1Res,
         l2Receipt,
         timestampL2,
         status: "OK",
