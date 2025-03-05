@@ -3,7 +3,7 @@ import { id } from "ethers";
 import winston from "winston";
 import { utils } from "zksync-ethers";
 
-import { MIN, unwrap } from "./utils";
+import { MIN, SEC, unwrap } from "./utils";
 
 import type { STATUS } from "./flowMetric";
 import type { BigNumberish, BytesLike, Overrides, TransactionReceipt } from "ethers";
@@ -46,7 +46,7 @@ export const STEPS = {
 };
 
 export const PRIORITY_OP_TIMEOUT = +(process.env.FLOW_DEPOSIT_L2_TIMEOUT ?? 15 * MIN);
-export const DEPOSIT_RETRY_INTERVAL = +(process.env.FLOW_DEPOSIT_RETRY_INTERVAL ?? 5 * MIN);
+export const DEPOSIT_RETRY_INTERVAL = +(process.env.FLOW_DEPOSIT_RETRY_INTERVAL ?? 30 * SEC);
 export const DEPOSIT_RETRY_LIMIT = +(process.env.DEPOSIT_RETRY_LIMIT ?? 3);
 
 export abstract class DepositBaseFlow {
@@ -60,7 +60,7 @@ export abstract class DepositBaseFlow {
     protected chainId: bigint,
     protected baseToken: string,
     private flowName: string
-  ) {}
+  ) { }
 
   protected getDepositRequest(): DepositTxRequest {
     return {
