@@ -159,8 +159,17 @@ export class DepositFlow extends DepositBaseFlow {
       for (let i = 0; i < DEPOSIT_RETRY_LIMIT; i++) {
         const result = await this.executeWatchdogDeposit();
         if (result === "FAIL") {
+          winston.warn(
+            `[deposit] attempt ${i + 1} of ${DEPOSIT_RETRY_LIMIT} failed` +
+              (i + 1 != DEPOSIT_RETRY_LIMIT
+                ? `, retrying in ${(DEPOSIT_RETRY_INTERVAL / 1000).toFixed(0)} seconds`
+                : "")
+          );
           await timeoutPromise(DEPOSIT_RETRY_INTERVAL);
-        } else break;
+        } else {
+          winston.info(`[deposit] attempt ${i + 1} succeeded`);
+          break;
+        }
       }
       await nextExecutionWait;
     }

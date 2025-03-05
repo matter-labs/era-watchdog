@@ -117,9 +117,15 @@ export class DepositUserFlow extends DepositBaseFlow {
         for (let i = 0; i < DEPOSIT_RETRY_LIMIT; i++) {
           const result = await this.executeDepositTx();
           if (result === "OK") {
+            winston.info(`[deposit] attempt ${i + 1} succeeded`);
             break;
           } else {
-            winston.error(`[depositUser] Deposit failed, retries ${i + 1}/${DEPOSIT_RETRY_LIMIT}`);
+            winston.error(
+              `[depositUser] Deposit failed on try ${i + 1}/${DEPOSIT_RETRY_LIMIT}` +
+                (i + 1 != DEPOSIT_RETRY_LIMIT
+                  ? `, retrying in ${(DEPOSIT_RETRY_INTERVAL / 1000).toFixed(0)} seconds`
+                  : "")
+            );
             await timeoutPromise(DEPOSIT_RETRY_INTERVAL);
           }
         }
