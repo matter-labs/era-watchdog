@@ -37,6 +37,7 @@ type L2Request = {
 
 export class DepositFlow extends DepositBaseFlow {
   private metricRecorder: FlowMetricRecorder;
+  private bridgehubAddressOverride?: string;
 
   constructor(
     wallet: Wallet,
@@ -51,10 +52,13 @@ export class DepositFlow extends DepositBaseFlow {
   ) {
     super(wallet, l1BridgeContracts, chainId, baseToken, FLOW_NAME);
     this.metricRecorder = new FlowMetricRecorder(FLOW_NAME);
-    const bridgeHubAddressOverride = process.env.BRIDGEHUB_ADDRESS_OVERRIDE;
-    if (bridgeHubAddressOverride) {
+    this.bridgehubAddressOverride = process.env.BRIDGEHUB_ADDRESS_OVERRIDE;
+    if (this.bridgehubAddressOverride != null) {
       this.wallet.getBridgehubContract = async () => {
-        return IBridgehub__factory.connect(bridgeHubAddressOverride, this.wallet._signerL1());
+        return IBridgehub__factory.connect(unwrap(this.bridgehubAddressOverride), this.wallet._signerL1());
+      };
+      this.wallet._providerL2().getBridgehubContractAddress = async () => {
+        return unwrap(this.bridgehubAddressOverride);
       };
     }
   }
@@ -63,12 +67,12 @@ export class DepositFlow extends DepositBaseFlow {
     try {
       // even before flow start we check base token allowence and perform an infinitite approve if needed
       if (this.baseToken != ETH_ADDRESS_IN_CONTRACTS) {
-        const allowance = await this.wallet.getAllowanceL1(this.baseToken);
+        const allowance = await this.wallet.getAllowanceL1(this.baseToken, this.bridgehubAddressOverride);
 
         // heuristic condition to determine if we should perform the infinite approval
         if (allowance < parseEther("100000")) {
           winston.info(`[deposit] Approving base token ${this.baseToken} for infinite amount`);
-          await this.wallet.approveERC20(this.baseToken, MaxInt256);
+          await this.wallet.approveERC20(this.baseToken, MaxInt256, { bridgeAddress: this.bridgehubAddressOverride });
         } else {
           winston.info(`[deposit] Base token ${this.baseToken} already has approval`);
         }
