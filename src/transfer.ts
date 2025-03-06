@@ -5,7 +5,11 @@ import { utils } from "zksync-ethers";
 import { FlowMetricRecorder } from "./flowMetric";
 import { MIN, SEC, timeoutPromise, unwrap } from "./utils";
 
+import type { STATUS } from "./flowMetric";
 import type { types, Provider, Wallet } from "zksync-ethers";
+
+const FLOW_RETRY_LIMIT = +(process.env.FLOW_RETRY_LIMIT ?? 5);
+const FLOW_RETRY_INTERVAL = +(process.env.FLOW_RETRY_INTERVAL ?? 5 * SEC);
 
 export class SimpleTxFlow {
   private metricRecorder: FlowMetricRecorder;
@@ -41,7 +45,7 @@ export class SimpleTxFlow {
     }
   }
 
-  protected async step() {
+  protected async step(): Promise<STATUS> {
     try {
       this.metricRecorder.recordFlowStart();
 
@@ -84,17 +88,28 @@ export class SimpleTxFlow {
       }); // included in a block
 
       this.metricRecorder.recordFlowSuccess();
+      return "OK";
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       winston.error("simple tx error: " + error?.message, error?.stack);
       this.metricRecorder.recordFlowFailure();
+      return "FAIL";
     }
   }
 
   public async run() {
     while (true) {
       const nextExecutionWait = timeoutPromise(this.intervalMs);
-      await this.step();
+      for (let i = 0; i < FLOW_RETRY_LIMIT; i++) {
+        const result = await this.step();
+        if (result === "OK") {
+          winston.info(`[transfer] attempt ${i + 1} succeeded`);
+          break;
+        } else {
+          winston.error(`[transfer] attempt ${i + 1} failed`);
+        }
+        await timeoutPromise(FLOW_RETRY_INTERVAL);
+      }
       //sleep
       await nextExecutionWait;
     }
