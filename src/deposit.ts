@@ -18,7 +18,7 @@ import { SEC, MIN, unwrap, timeoutPromise } from "./utils";
 import type { STATUS } from "./flowMetric";
 import type { BigNumberish, BytesLike, Overrides } from "ethers";
 import type { Wallet } from "zksync-ethers";
-import type { IL1ERC20Bridge, IL1SharedBridge } from "zksync-ethers/build/typechain";
+import { IBridgehub__factory, type IL1ERC20Bridge, type IL1SharedBridge } from "zksync-ethers/build/typechain";
 import type { Address } from "zksync-ethers/build/types";
 
 const FLOW_NAME = "deposit";
@@ -51,6 +51,12 @@ export class DepositFlow extends DepositBaseFlow {
   ) {
     super(wallet, l1BridgeContracts, chainId, baseToken, FLOW_NAME);
     this.metricRecorder = new FlowMetricRecorder(FLOW_NAME);
+    const bridgeHubAddressOverride = process.env.BRIDGEHUB_ADDRESS_OVERRIDE;
+    if (bridgeHubAddressOverride) {
+      this.wallet.getBridgehubContract = async () => {
+        return IBridgehub__factory.connect(bridgeHubAddressOverride, this.wallet._signerL1());
+      };
+    }
   }
 
   protected async executeWatchdogDeposit(): Promise<STATUS> {
@@ -161,9 +167,9 @@ export class DepositFlow extends DepositBaseFlow {
         if (result === "FAIL") {
           winston.warn(
             `[deposit] attempt ${i + 1} of ${DEPOSIT_RETRY_LIMIT} failed` +
-              (i + 1 != DEPOSIT_RETRY_LIMIT
-                ? `, retrying in ${(DEPOSIT_RETRY_INTERVAL / 1000).toFixed(0)} seconds`
-                : "")
+            (i + 1 != DEPOSIT_RETRY_LIMIT
+              ? `, retrying in ${(DEPOSIT_RETRY_INTERVAL / 1000).toFixed(0)} seconds`
+              : "")
           );
           await timeoutPromise(DEPOSIT_RETRY_INTERVAL);
         } else {

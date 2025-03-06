@@ -60,7 +60,7 @@ export abstract class DepositBaseFlow {
     protected chainId: bigint,
     protected baseToken: string,
     private flowName: string
-  ) {}
+  ) { }
 
   protected getDepositRequest(): DepositTxRequest {
     return {
