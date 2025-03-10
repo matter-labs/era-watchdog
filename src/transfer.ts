@@ -31,7 +31,7 @@ export class SimpleTxFlow {
       });
       return {
         to: this.wallet.address,
-        value: 1, // just 1 wei
+        value: 0, // in paymaster scenario we may not have any funds
         customData: {
           gasPerPubdata: utils.DEFAULT_GAS_PER_PUBDATA_LIMIT,
           paymasterParams,
