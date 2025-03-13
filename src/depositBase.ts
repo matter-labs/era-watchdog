@@ -52,7 +52,8 @@ export const DEPOSIT_RETRY_LIMIT = +(process.env.FLOW_DEPOSIT_RETRY_LIMIT ?? 3);
 
 const GWEI = 1000n * 1000n * 1000n;
 /// We avoid L1 transactions if gas price is higher than this limit
-export const DEPOSIT_L1_GAS_PRICE_LIMIT_GWEI = BigInt(+(process.env.DEPOSIT_L1_GAS_PRICE_LIMIT_GWEI ?? 1000)) * GWEI;
+export const DEPOSIT_L1_GAS_PRICE_LIMIT_GWEI =
+  BigInt(+(process.env.FLOW_DEPOSIT_L1_GAS_PRICE_LIMIT_GWEI ?? 1000)) * GWEI;
 
 export abstract class DepositBaseFlow {
   constructor(
