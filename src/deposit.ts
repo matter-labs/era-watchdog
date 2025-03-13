@@ -76,12 +76,14 @@ export class DepositFlow extends DepositBaseFlow {
       const populatedWithOverrides = await this.metricRecorder.stepExecution({
         stepName: STEPS.estimation,
         stepTimeoutMs: 30 * SEC,
-        fn: async ({ recordStepGas }) => {
+        fn: async ({ recordStepGas, recordStepGasCost, recordStepGasPrice }) => {
           const populated: L2Request = await this.wallet.getDepositTx(this.getDepositRequest());
           const estimatedGas = await this.wallet.estimateGasRequestExecute(populated);
           const nonce = await this.wallet._signerL1().getNonce("latest");
           const feeData = await this.wallet._providerL1().getFeeData();
           recordStepGas(estimatedGas);
+          recordStepGasPrice(unwrap(feeData.maxFeePerGas));
+          recordStepGasCost(estimatedGas * unwrap(feeData.maxFeePerGas));
           return {
             ...populated,
             overrides: {
