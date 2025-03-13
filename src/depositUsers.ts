@@ -3,12 +3,18 @@ import { Gauge } from "prom-client";
 import winston from "winston";
 import { utils } from "zksync-ethers";
 
-import { DEPOSIT_RETRY_INTERVAL, DEPOSIT_RETRY_LIMIT, DepositBaseFlow, STEPS } from "./depositBase";
+import {
+  DEPOSIT_L1_GAS_PRICE_LIMIT_GWEI,
+  DEPOSIT_RETRY_INTERVAL,
+  DEPOSIT_RETRY_LIMIT,
+  DepositBaseFlow,
+  STEPS,
+} from "./depositBase";
 import { FlowMetricRecorder } from "./flowMetric";
 import { SEC, timeoutPromise, unwrap } from "./utils";
 
 import type { ExecutionResultKnown } from "./depositBase";
-import type { STATUS } from "./flowMetric";
+import type { Status } from "./flowMetric";
 import type { Wallet } from "zksync-ethers";
 import type { IL1ERC20Bridge, IL1SharedBridge } from "zksync-ethers/build/typechain";
 
@@ -65,8 +71,7 @@ export class DepositUserFlow extends DepositBaseFlow {
       );
       this.metricTimeSinceLastDeposit.set(result.secSinceL1Deposit);
       winston.info(
-        `[depositUser] Reported successful deposit. L1 hash: ${result.l1Receipt.hash}, L2 hash: ${
-          result.l2Receipt?.hash
+        `[depositUser] Reported successful deposit. L1 hash: ${result.l1Receipt.hash}, L2 hash: ${result.l2Receipt?.hash
         }`
       );
     } else if (result.status === "FAIL") {
@@ -80,10 +85,25 @@ export class DepositUserFlow extends DepositBaseFlow {
     }
   }
 
-  private async executeDepositTx(): Promise<STATUS> {
+  private async executeDepositTx(): Promise<Status> {
     try {
       this.lastOnChainOperationTimestamp = await this.getCurrentChainTimestamp();
-      const depositHandle = await this.wallet.deposit(this.getDepositRequest());
+      const feeData = await this.wallet._providerL1().getFeeData();
+      const maxFeePerGas = unwrap(feeData.maxFeePerGas);
+      if (maxFeePerGas > DEPOSIT_L1_GAS_PRICE_LIMIT_GWEI) {
+        winston.error(
+          `[depositUser] Gas price ${maxFeePerGas} is higher than limit ${DEPOSIT_L1_GAS_PRICE_LIMIT_GWEI}, skipping watchdog deposit`
+        );
+        this.metricRecorder.manualRecordStatus("SKIP", 0);
+        return "SKIP";
+      }
+      const depositHandle = await this.wallet.deposit({
+        ...this.getDepositRequest(),
+        overrides: {
+          maxFeePerGas,
+          maxPriorityFeePerGas: unwrap(feeData.maxPriorityFeePerGas),
+        },
+      });
       winston.info(`[depositUser] Deposit transaction sent ${depositHandle.hash}`);
       const txReceipt = await depositHandle.waitL1Commit(1);
       const l2TxHash = utils.getL2HashFromPriorityOp(
@@ -127,6 +147,7 @@ export class DepositUserFlow extends DepositBaseFlow {
           break;
         }
         case "FAIL":
+          // user tranasctions rearly fail normally, but sometimes they do. We perform manual deposit in such case
           shouldPerformManualDeposit = true;
           break;
         case null:
@@ -145,19 +166,32 @@ export class DepositUserFlow extends DepositBaseFlow {
           currentBlockchainTimestamp - Math.max(lastOurExecution.timestampL1, this.lastOnChainOperationTimestamp);
         if (timeSinceLastOurDeposit * SEC > this.txTriggerDelayMs) {
           winston.info("[depositUser] Starting manual deposit transaction");
-          for (let i = 0; i < DEPOSIT_RETRY_LIMIT; i++) {
+          let attempt = 0;
+          while (attempt < DEPOSIT_RETRY_LIMIT) {
             const result = await this.executeDepositTx();
-            if (result === "OK") {
-              winston.info(`[depositUser] attempt ${i + 1} succeeded`);
-              break;
-            } else {
-              winston.error(
-                `[depositUser] Deposit failed on try ${i + 1}/${DEPOSIT_RETRY_LIMIT}` +
-                  (i + 1 != DEPOSIT_RETRY_LIMIT
+            switch (result) {
+              case "OK":
+                winston.info(`[depositUser] attempt ${attempt + 1} succeeded`);
+                break;
+              case "SKIP":
+                winston.info(`[depositUser] attempt ${attempt + 1} skipped. Not counting towards retry limit`);
+                break;
+              case "FAIL":
+                winston.error(
+                  `[depositUser] Deposit failed on try ${attempt + 1}/${DEPOSIT_RETRY_LIMIT}` +
+                  (attempt + 1 != DEPOSIT_RETRY_LIMIT
                     ? `, retrying in ${(DEPOSIT_RETRY_INTERVAL / 1000).toFixed(0)} seconds`
                     : "")
-              );
-              await timeoutPromise(DEPOSIT_RETRY_INTERVAL);
+                );
+                attempt++;
+                await timeoutPromise(DEPOSIT_RETRY_INTERVAL);
+                break;
+              default:
+                const _impossible: never = result;
+                throw new Error(`Unexpected result ${result}`);
+            }
+            if (result === "OK") {
+              break;
             }
           }
         } else {

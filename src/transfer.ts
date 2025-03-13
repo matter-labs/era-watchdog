@@ -6,8 +6,8 @@ import { L2_EXECUTION_TIMEOUT } from "./configs";
 import { FlowMetricRecorder } from "./flowMetric";
 import { SEC, timeoutPromise, unwrap } from "./utils";
 
-import type { STATUS } from "./flowMetric";
 import type { Mutex } from "./lock";
+import type { StatusNoSkip } from "./flowMetric";
 import type { types, Provider, Wallet } from "zksync-ethers";
 
 const FLOW_RETRY_LIMIT = +(process.env.FLOW_RETRY_LIMIT ?? 5);
@@ -48,7 +48,7 @@ export class SimpleTxFlow {
     }
   }
 
-  protected async step(): Promise<STATUS> {
+  protected async step(): Promise<StatusNoSkip> {
     try {
       this.metricRecorder.recordFlowStart();
 

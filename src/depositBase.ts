@@ -5,7 +5,7 @@ import { utils } from "zksync-ethers";
 
 import { MIN, SEC, unwrap } from "./utils";
 
-import type { STATUS } from "./flowMetric";
+import type { StatusNoSkip } from "./flowMetric";
 import type { BigNumberish, BytesLike, Overrides, TransactionReceipt } from "ethers";
 import type { types, Wallet } from "zksync-ethers";
 import type { IL1ERC20Bridge, IL1SharedBridge } from "zksync-ethers/build/typechain";
@@ -34,7 +34,7 @@ export type ExecutionResultKnown = {
   timestampL1: number;
   l2Receipt?: TransactionReceipt;
   timestampL2?: number;
-  status: STATUS;
+  status: StatusNoSkip;
 };
 export type ExecutionResult = ExecutionResultUnknown | ExecutionResultKnown;
 
@@ -49,6 +49,10 @@ export const STEPS = {
 export const PRIORITY_OP_TIMEOUT = +(process.env.FLOW_DEPOSIT_L2_TIMEOUT ?? 15 * MIN);
 export const DEPOSIT_RETRY_INTERVAL = +(process.env.FLOW_DEPOSIT_RETRY_INTERVAL ?? 30 * SEC);
 export const DEPOSIT_RETRY_LIMIT = +(process.env.FLOW_DEPOSIT_RETRY_LIMIT ?? 3);
+
+const GWEI = 1000n * 1000n * 1000n;
+/// We avoid L1 transactions if gas price is higher than this limit
+export const DEPOSIT_L1_GAS_PRICE_LIMIT_GWEI = BigInt(+(process.env.DEPOSIT_L1_GAS_PRICE_LIMIT_GWEI ?? 1000)) * GWEI;
 
 export abstract class DepositBaseFlow {
   constructor(

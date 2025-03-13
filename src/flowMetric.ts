@@ -3,7 +3,8 @@ import winston from "winston";
 
 import { withTimeout } from "./utils";
 
-export type STATUS = "OK" | "FAIL";
+export type StatusNoSkip = "OK" | "FAIL";
+export type Status = StatusNoSkip | "SKIP";
 
 /// singleton for metric storage
 class FlowMetricStore {
@@ -113,6 +114,18 @@ export class FlowMetricRecorder {
     }
   }
 
+  public recordFlowSkipped() {
+    if (this.startTime) {
+      const endTime = Date.now();
+      const latency = (endTime - this.startTime) / 1000; // in seconds
+      store.metric_status.set({ flow: this.flowName }, 0.5);
+      this.startTime = null;
+      winston.info(`[${this.flowName}] Flow skipped after ${latency} seconds`);
+    } else {
+      throw new Error("Flow start was not recorded");
+    }
+  }
+
   public recordFlowFailure() {
     store.metric_status.set({ flow: this.flowName }, 0);
     this.startTime = null;
@@ -121,7 +134,7 @@ export class FlowMetricRecorder {
 
   /// MANUAL FUNCTIONS
   /// Needed for recording based solly on onchain data
-  public manualRecordStatus(status: STATUS, latencyTotalSec: number) {
+  public manualRecordStatus(status: Status, latencyTotalSec: number) {
     store.metric_status.set({ flow: this.flowName }, status === "OK" ? 1 : 0);
     if (status === "OK") {
       store.metric_latency_total.set({ flow: this.flowName }, latencyTotalSec);
@@ -148,7 +161,7 @@ export class FlowMetricRecorder {
     store.metric_step_gas_cost.set({ flow: this.flowName, step: stepName }, Number(cost));
   }
 
-  public recordPreviousExecutionStatus(status: STATUS) {
+  public recordPreviousExecutionStatus(status: StatusNoSkip) {
     switch (status) {
       case "OK": {
         store.metric_status.set({ flow: this.flowName }, 1);
