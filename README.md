@@ -37,6 +37,7 @@ yarn run start
     - transfer flow:
         - `FLOW_TRANSFER_ENABLE` -- set to `1` to enable transfer flow
         - `FLOW_TRANSFER_INTERVAL` -- transfer flow interval in ms
+        - `FLOW_TRANSFER_EXECUTION_TIMEOUT` -- timeout of l2 transfer confirmation in ms
     - deposit flow:
         - `FLOW_DEPOSIT_ENABLE` -- set to `1` to enable deposit flow
         - `CHAIN_L1_RPC_URL` -- l1 json-rpc endpoint

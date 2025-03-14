@@ -3,13 +3,14 @@ import winston from "winston";
 import { utils } from "zksync-ethers";
 
 import { FlowMetricRecorder } from "./flowMetric";
-import { MIN, SEC, timeoutPromise, unwrap } from "./utils";
+import { SEC, timeoutPromise, unwrap } from "./utils";
 
 import type { STATUS } from "./flowMetric";
 import type { types, Provider, Wallet } from "zksync-ethers";
 
 const FLOW_RETRY_LIMIT = +(process.env.FLOW_RETRY_LIMIT ?? 5);
 const FLOW_RETRY_INTERVAL = +(process.env.FLOW_RETRY_INTERVAL ?? 5 * SEC);
+const FLOW_TRANSFER_EXECUTION_TIMEOUT = +(process.env.FLOW_TRANSFER_EXECUTION_TIMEOUT ?? 15 * SEC);
 
 export class SimpleTxFlow {
   private metricRecorder: FlowMetricRecorder;
@@ -77,7 +78,7 @@ export class SimpleTxFlow {
       // wait for transaction
       await this.metricRecorder.stepExecution({
         stepName: "execution",
-        stepTimeoutMs: 1 * MIN,
+        stepTimeoutMs: FLOW_TRANSFER_EXECUTION_TIMEOUT,
         fn: async ({ recordStepGas, recordStepGasPrice, recordStepGasCost }) => {
           const receipt = await txResponse.wait(1);
           recordStepGas(unwrap(receipt.gasUsed));
