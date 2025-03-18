@@ -105,7 +105,7 @@ export class DepositFlow extends DepositBaseFlow {
         winston.warn(
           `[deposit] Gas price ${populatedWithOverrides.overrides.maxFeePerGas} is higher than limit ${DEPOSIT_L1_GAS_PRICE_LIMIT_GWEI}. Skipping deposit`
         );
-        this.metricRecorder.recordFlowSuccess();
+        this.metricRecorder.recordFlowSkipped();
         return "SKIP";
       }
 
