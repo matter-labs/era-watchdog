@@ -10,6 +10,7 @@ import { WithdrawalBaseFlow, STEPS } from "./withdrawalBase";
 import type { STATUS } from "./flowMetric";
 import type { BigNumberish } from "ethers";
 import type { Wallet } from "zksync-ethers";
+import { Gauge } from "prom-client";
 
 const FLOW_NAME = "withdrawalFinalize";
 const FINALIZE_INTERVAL = +(process.env.FLOW_WITHDRAWAL_FINALIZE_INTERVAL ?? 15 * MIN);
@@ -17,6 +18,9 @@ const PRE_V26_BRIDGES = process.env.PRE_V26_BRIDGES === "1";
 
 export class WithdrawalFinalizeFlow extends WithdrawalBaseFlow {
   private metricRecorder: FlowMetricRecorder;
+  private metricTimeSinceLastFinalizableWithdrawal: Gauge;
+  private metricTimeSinceLastFinalizedBlock: Gauge;
+
 
   constructor(
     wallet: Wallet,
@@ -25,30 +29,34 @@ export class WithdrawalFinalizeFlow extends WithdrawalBaseFlow {
   ) {
     super(wallet, paymasterAddress, FLOW_NAME);
     this.metricRecorder = new FlowMetricRecorder(FLOW_NAME);
-  }
-
-  private async getLatestWithdrawalHash(): Promise<string | null> {
-    const execution = await this.getLastExecution("finalized", this.wallet.address);
-    if (execution === null) {
-      winston.info(`[${FLOW_NAME}] No finalized withdrawals found for ${this.wallet.address}`);
-      return null;
-    }
-
-    return execution.l2Receipt.hash;
+    this.metricTimeSinceLastFinalizableWithdrawal = new Gauge({
+      name: "watchdog_time_since_last_finalizable_withdrawal",
+      help: "Blockchain second since last finalizable withdrawal transaction on L2",
+    });
+    this.metricTimeSinceLastFinalizedBlock = new Gauge({
+      name: "watchdog_time_since_last_finalized_block",
+      help: "Real second since last finalized block on L2",
+    });
   }
 
   protected async executeWithdrawalFinalize(): Promise<STATUS> {
     try {
-      const withdrawalHash = await this.getLatestWithdrawalHash();
+      const execution = await this.getLastExecution("finalized", this.wallet.address);
+      const blockTimestamp = await this.getCurrentChainTimestamp();
+      const finalizedBlockTimestamp = await this.getLatestFinalizedBlockTimestamp()
       this.metricRecorder.recordFlowStart();
 
-      if (!withdrawalHash) {
+      if (!execution) {
         winston.error(`[${FLOW_NAME}] No withdrawal found to try finalize`);
         this.metricRecorder.recordFlowFailure();
         return "FAIL";
       }
+      const withdrawalHash = execution.l2Receipt.hash;
 
-      winston.info(`[${FLOW_NAME}] Simulating finalization for withdrawal hash: ${withdrawalHash}`);
+      this.metricTimeSinceLastFinalizableWithdrawal.set(blockTimestamp - execution.timestampL2);
+      this.metricTimeSinceLastFinalizedBlock.set((new Date().getTime() / 1000) - finalizedBlockTimestamp);
+
+      winston.info(`[${FLOW_NAME}] Simulating finalization for withdrawal hablockTimestampsh: ${withdrawalHash}`);
 
       // Get finalization parameters
       const { l1BatchNumber, l2MessageIndex, l2TxNumberInBlock, message, sender, proof } =

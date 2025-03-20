@@ -42,7 +42,7 @@ export abstract class WithdrawalBaseFlow {
     protected wallet: Wallet,
     protected paymasterAddress: string | undefined,
     private flowName: string
-  ) {}
+  ) { }
 
   protected getWithdrawalRequest(): WithdrawalTxRequest {
     const request: WithdrawalTxRequest = {
@@ -100,6 +100,15 @@ export abstract class WithdrawalBaseFlow {
       await this.wallet
         ._providerL2()
         .getBlock("latest")
+        .then((block) => block?.timestamp)
+    );
+  }
+
+  protected async getLatestFinalizedBlockTimestamp(): Promise<number> {
+    return unwrap(
+      await this.wallet
+        ._providerL2()
+        .getBlock("finalized")
         .then((block) => block?.timestamp)
     );
   }
