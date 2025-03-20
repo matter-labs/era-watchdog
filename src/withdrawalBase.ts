@@ -42,7 +42,7 @@ export abstract class WithdrawalBaseFlow {
     protected wallet: Wallet,
     protected paymasterAddress: string | undefined,
     private flowName: string
-  ) { }
+  ) {}
 
   protected getWithdrawalRequest(): WithdrawalTxRequest {
     const request: WithdrawalTxRequest = {

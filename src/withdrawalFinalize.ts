@@ -1,5 +1,6 @@
 import "dotenv/config";
 
+import { Gauge } from "prom-client";
 import winston from "winston";
 import { L2_BASE_TOKEN_ADDRESS, isAddressEq } from "zksync-ethers/build/utils";
 
@@ -10,7 +11,6 @@ import { WithdrawalBaseFlow, STEPS } from "./withdrawalBase";
 import type { STATUS } from "./flowMetric";
 import type { BigNumberish } from "ethers";
 import type { Wallet } from "zksync-ethers";
-import { Gauge } from "prom-client";
 
 const FLOW_NAME = "withdrawalFinalize";
 const FINALIZE_INTERVAL = +(process.env.FLOW_WITHDRAWAL_FINALIZE_INTERVAL ?? 15 * MIN);
@@ -20,7 +20,6 @@ export class WithdrawalFinalizeFlow extends WithdrawalBaseFlow {
   private metricRecorder: FlowMetricRecorder;
   private metricTimeSinceLastFinalizableWithdrawal: Gauge;
   private metricTimeSinceLastFinalizedBlock: Gauge;
-
 
   constructor(
     wallet: Wallet,
@@ -43,7 +42,7 @@ export class WithdrawalFinalizeFlow extends WithdrawalBaseFlow {
     try {
       const execution = await this.getLastExecution("finalized", this.wallet.address);
       const blockTimestamp = await this.getCurrentChainTimestamp();
-      const finalizedBlockTimestamp = await this.getLatestFinalizedBlockTimestamp()
+      const finalizedBlockTimestamp = await this.getLatestFinalizedBlockTimestamp();
       this.metricRecorder.recordFlowStart();
 
       if (!execution) {
@@ -54,7 +53,7 @@ export class WithdrawalFinalizeFlow extends WithdrawalBaseFlow {
       const withdrawalHash = execution.l2Receipt.hash;
 
       this.metricTimeSinceLastFinalizableWithdrawal.set(blockTimestamp - execution.timestampL2);
-      this.metricTimeSinceLastFinalizedBlock.set((new Date().getTime() / 1000) - finalizedBlockTimestamp);
+      this.metricTimeSinceLastFinalizedBlock.set(new Date().getTime() / 1000 - finalizedBlockTimestamp);
 
       winston.info(`[${FLOW_NAME}] Simulating finalization for withdrawal hablockTimestampsh: ${withdrawalHash}`);
 
