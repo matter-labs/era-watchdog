@@ -9,6 +9,8 @@ import { DepositFlow } from "./deposit";
 import { DepositUserFlow } from "./depositUsers";
 import { setupLogger } from "./logger";
 import { SimpleTxFlow } from "./transfer";
+import { WithdrawalFlow } from "./withdrawal";
+import { WithdrawalFinalizeFlow } from "./withdrawalFinalize";
 import { unwrap } from "./utils";
 
 const main = async () => {
@@ -56,6 +58,14 @@ const main = async () => {
       ).run();
       enabledFlows++;
     }
+  }
+  if (process.env.FLOW_WITHDRAWAL_ENABLE === "1") {
+    new WithdrawalFlow(
+      wallet,
+      paymasterAddress,
+      +unwrap(process.env.FLOW_WITHDRAWAL_INTERVAL)
+    ).run();
+    enabledFlows++;
   }
   winston.info(`Enabled ${enabledFlows} flows`);
   if (enabledFlows === 0) {
