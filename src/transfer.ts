@@ -2,12 +2,12 @@ import "dotenv/config";
 import winston from "winston";
 import { utils } from "zksync-ethers";
 
+import { L2_EXECUTION_TIMEOUT } from "./configs";
 import { FlowMetricRecorder } from "./flowMetric";
 import { SEC, timeoutPromise, unwrap } from "./utils";
 
 import type { STATUS } from "./flowMetric";
 import type { types, Provider, Wallet } from "zksync-ethers";
-import { L2_EXECUTION_TIMEOUT } from "./configs";
 
 const FLOW_RETRY_LIMIT = +(process.env.FLOW_RETRY_LIMIT ?? 5);
 const FLOW_RETRY_INTERVAL = +(process.env.FLOW_RETRY_INTERVAL ?? 5 * SEC);

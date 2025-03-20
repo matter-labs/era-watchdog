@@ -56,5 +56,9 @@ yarn run start
         - `FLOW_WITHDRAWAL_INTERVAL` -- withdrawal flow interval in ms
         - `FLOW_WITHDRAWAL_RETRY_LIMIT` -- number of retries for withdrawal flow (defaults to 10)
         - `FLOW_WITHDRAWAL_RETRY_INTERVAL` -- interval between retries in ms (defaults to 30sec)
+    - withdrawal finalize flow: (simulates finalization of the latest withdrawal for validation)
+        - `FLOW_WITHDRAWAL_FINALIZE_ENABLE` -- set to `1` to enable withdrawal finalize flow
+        - `FLOW_WITHDRAWAL_FINALIZE_INTERVAL` -- withdrawal finalize flow interval in ms (defaults to 15 minutes)
+        - `PRE_V26_BRIDGES` -- set to `1` to use pre-v26 bridges (`withdrawalFinalize` requiring `legacySharedBridge` called through `BridgeHub` instead of `L1Nullifier` `depositFinalized` called directly)
 
 - run the container

@@ -1,13 +1,13 @@
 import "dotenv/config";
 import { utils } from "zksync-ethers";
+import { IEthToken__factory as IETHTokenFactory } from "zksync-ethers/build/typechain";
+import { L2_BASE_TOKEN_ADDRESS } from "zksync-ethers/build/utils";
 
 import { SEC, unwrap } from "./utils";
 
 import type { BigNumberish, ethers, TransactionReceipt } from "ethers";
 import type { types, Wallet } from "zksync-ethers";
 import type { PaymasterParams } from "zksync-ethers/build/types";
-import { IEthToken__factory as IETHTokenFactory } from "zksync-ethers/build/typechain";
-import { L2_BASE_TOKEN_ADDRESS } from "zksync-ethers/build/utils";
 
 export type WithdrawalTxRequest = {
   token: types.Address;
@@ -30,18 +30,19 @@ export const STEPS = {
   estimation: "estimation",
   send: "send",
   l2_execution: "l2_execution",
+  get_finalization_params: "get_finalization_params",
+  l1_simulation: "l1_simulation",
 };
 
 export const WITHDRAWAL_RETRY_INTERVAL = +(process.env.FLOW_WITHDRAWAL_RETRY_INTERVAL ?? 30 * SEC);
 export const WITHDRAWAL_RETRY_LIMIT = +(process.env.FLOW_WITHDRAWAL_RETRY_LIMIT ?? 10);
 
 export abstract class WithdrawalBaseFlow {
-
   constructor(
     protected wallet: Wallet,
     protected paymasterAddress: string | undefined,
     private flowName: string
-  ) { }
+  ) {}
 
   protected getWithdrawalRequest(): WithdrawalTxRequest {
     const request: WithdrawalTxRequest = {
@@ -58,13 +59,16 @@ export abstract class WithdrawalBaseFlow {
       return {
         ...request,
         paymasterParams,
-      }
+      };
     } else {
       return request;
     }
   }
 
-  protected async getLastExecution(blockType: 'latest' | 'finalized', wallet: string | undefined): Promise<ExecutionResult> {
+  protected async getLastExecution(
+    blockType: "latest" | "finalized",
+    wallet: string | undefined
+  ): Promise<ExecutionResult> {
     const baseToken = IETHTokenFactory.connect(L2_BASE_TOKEN_ADDRESS, this.wallet._providerL2());
     const filter = baseToken.filters.Withdrawal(wallet, wallet);
     const topBlock = await this.wallet._providerL2().getBlock(blockType);
@@ -79,8 +83,7 @@ export abstract class WithdrawalBaseFlow {
 
     events.sort((a, b) => b.blockNumber - a.blockNumber);
 
-    if (events.length === 0)
-      return null;
+    if (events.length === 0) return null;
 
     const event = events[0];
     const timestampL2 = (await event.getBlock()).timestamp;
