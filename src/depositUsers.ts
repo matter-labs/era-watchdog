@@ -15,7 +15,7 @@ import type { IL1ERC20Bridge, IL1SharedBridge } from "zksync-ethers/build/typech
 const FLOW_NAME = "depositUser";
 export class DepositUserFlow extends DepositBaseFlow {
   private metricRecorder: FlowMetricRecorder;
-  private lastOnChainOperaionTimestamp: number = 0;
+  private lastOnChainOperationTimestamp: number = 0;
   private metricTimeSinceLastDeposit: Gauge;
 
   constructor(
@@ -64,7 +64,15 @@ export class DepositUserFlow extends DepositBaseFlow {
         unwrap(result.l2Receipt).gasUsed * unwrap(result.l2Receipt).gasPrice
       );
       this.metricTimeSinceLastDeposit.set(result.secSinceL1Deposit);
+      winston.info(
+        `[depositUser] Reported successful deposit. L1 hash: ${result.l1Receipt.hash}, L2 hash: ${
+          result.l2Receipt?.hash
+        }`
+      );
     } else if (result.status === "FAIL") {
+      winston.info(
+        `[depositUser] Reported failed deposit. L1 hash: ${result.l1Receipt.hash}, L2 hash: ${result.l2Receipt?.hash}`
+      );
       this.metricRecorder.manualRecordStatus(result.status, 0);
     } else {
       const _impossible: never = result.status;
@@ -74,7 +82,7 @@ export class DepositUserFlow extends DepositBaseFlow {
 
   private async executeDepositTx(): Promise<STATUS> {
     try {
-      this.lastOnChainOperaionTimestamp = await this.getCurrentChainTimestamp();
+      this.lastOnChainOperationTimestamp = await this.getCurrentChainTimestamp();
       const depositHandle = await this.wallet.deposit(this.getDepositRequest());
       winston.info(`[depositUser] Deposit transaction sent ${depositHandle.hash}`);
       const txReceipt = await depositHandle.waitL1Commit(1);
@@ -104,32 +112,62 @@ export class DepositUserFlow extends DepositBaseFlow {
       const nextExecutionWait = timeoutPromise(this.intervalMs);
       const currentBlockchainTimestamp = await this.getCurrentChainTimestamp();
       const someDepositResult = await this.getLastExecution(void 0);
-      if (someDepositResult.status != null) {
-        this.recordDepositResult(someDepositResult);
-      }
-      // we take max with last onchain operation timestamp in case onchain operations are fialing on L1 to avoid direspecting retry limit
-      const timeSinceLastDeposit =
-        currentBlockchainTimestamp - Math.max(someDepositResult.timestampL1, this.lastOnChainOperaionTimestamp);
-      if (timeSinceLastDeposit * SEC > this.txTriggerDelayMs) {
-        winston.info(
-          `[depositUser] No deposit detected in the last ${timeSinceLastDeposit} seconds, starting deposit transaction`
-        );
-        for (let i = 0; i < DEPOSIT_RETRY_LIMIT; i++) {
-          const result = await this.executeDepositTx();
-          if (result === "OK") {
-            winston.info(`[deposit] attempt ${i + 1} succeeded`);
-            break;
-          } else {
-            winston.error(
-              `[depositUser] Deposit failed on try ${i + 1}/${DEPOSIT_RETRY_LIMIT}` +
-                (i + 1 != DEPOSIT_RETRY_LIMIT
-                  ? `, retrying in ${(DEPOSIT_RETRY_INTERVAL / 1000).toFixed(0)} seconds`
-                  : "")
+      // we only report OK. On fail we want perform a deposit manually as we cannot rely on users doing deposits properly
+      let shouldPerformManualDeposit: boolean = false;
+      switch (someDepositResult.status) {
+        case "OK": {
+          this.recordDepositResult(someDepositResult);
+          const timeSinceLastDeposit = currentBlockchainTimestamp - someDepositResult.timestampL1;
+          if (timeSinceLastDeposit * SEC > this.txTriggerDelayMs) {
+            winston.info(
+              `[depositUser] Last users deposit was successful, but it was ${timeSinceLastDeposit} seconds ago. Will execute deposit tx manually.`
             );
-            await timeoutPromise(DEPOSIT_RETRY_INTERVAL);
+            shouldPerformManualDeposit = true;
           }
+          break;
+        }
+        case "FAIL":
+          shouldPerformManualDeposit = true;
+          break;
+        case null:
+          shouldPerformManualDeposit = true;
+          break;
+        default: {
+          const _impossible: never = someDepositResult;
+          throw new Error(`Unexpected status ${someDepositResult["status"]}`);
         }
       }
+      if (shouldPerformManualDeposit) {
+        winston.info("[depositUser] Checking for last MANUAL deposit...");
+        const lastOurExecution = await this.getLastExecution(this.wallet.address);
+        // we take max with last onchain operation timestamp in case onchain operations are failing on L1 to avoid disrespecting retry limit
+        const timeSinceLastOurDeposit =
+          currentBlockchainTimestamp - Math.max(lastOurExecution.timestampL1, this.lastOnChainOperationTimestamp);
+        if (timeSinceLastOurDeposit * SEC > this.txTriggerDelayMs) {
+          winston.info("[depositUser] Starting manual deposit transaction");
+          for (let i = 0; i < DEPOSIT_RETRY_LIMIT; i++) {
+            const result = await this.executeDepositTx();
+            if (result === "OK") {
+              winston.info(`[depositUser] attempt ${i + 1} succeeded`);
+              break;
+            } else {
+              winston.error(
+                `[depositUser] Deposit failed on try ${i + 1}/${DEPOSIT_RETRY_LIMIT}` +
+                  (i + 1 != DEPOSIT_RETRY_LIMIT
+                    ? `, retrying in ${(DEPOSIT_RETRY_INTERVAL / 1000).toFixed(0)} seconds`
+                    : "")
+              );
+              await timeoutPromise(DEPOSIT_RETRY_INTERVAL);
+            }
+          }
+        } else {
+          winston.info(
+            `[depositUser] Last manual deposit was ${timeSinceLastOurDeposit} seconds ago. Reporting last status of ${lastOurExecution.status}`
+          );
+          if (lastOurExecution.status != null) this.recordDepositResult(lastOurExecution);
+        }
+      }
+
       await nextExecutionWait;
     }
   }

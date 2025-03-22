@@ -90,11 +90,13 @@ export abstract class DepositBaseFlow {
       toBlock: topBlock,
     });
     events.sort((a, b) => b.blockNumber - a.blockNumber);
-    if (events.length === 0)
+    if (events.length === 0) {
+      winston.info(`[${this.flowName}] No deposits found for ${wallet ?? "any wallet"}`);
       return {
         timestampL1: 0,
         status: null,
       };
+    }
     const event = events[0];
 
     const timestampL1 = (await event.getBlock()).timestamp;
