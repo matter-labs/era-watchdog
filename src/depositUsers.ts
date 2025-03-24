@@ -71,7 +71,8 @@ export class DepositUserFlow extends DepositBaseFlow {
       );
       this.metricTimeSinceLastDeposit.set(result.secSinceL1Deposit);
       winston.info(
-        `[depositUser] Reported successful deposit. L1 hash: ${result.l1Receipt.hash}, L2 hash: ${result.l2Receipt?.hash
+        `[depositUser] Reported successful deposit. L1 hash: ${result.l1Receipt.hash}, L2 hash: ${
+          result.l2Receipt?.hash
         }`
       );
     } else if (result.status === "FAIL") {
@@ -133,31 +134,19 @@ export class DepositUserFlow extends DepositBaseFlow {
       const currentBlockchainTimestamp = await this.getCurrentChainTimestamp();
       const someDepositResult = await this.getLastExecution(void 0);
       // we only report OK. On fail we want perform a deposit manually as we cannot rely on users doing deposits properly
-      let shouldPerformManualDeposit: boolean = false;
-      switch (someDepositResult.status) {
-        case "OK": {
-          this.recordDepositResult(someDepositResult);
-          const timeSinceLastDeposit = currentBlockchainTimestamp - someDepositResult.timestampL1;
-          if (timeSinceLastDeposit * SEC > this.txTriggerDelayMs) {
-            winston.info(
-              `[depositUser] Last users deposit was successful, but it was ${timeSinceLastDeposit} seconds ago. Will execute deposit tx manually.`
-            );
-            shouldPerformManualDeposit = true;
-          }
-          break;
-        }
-        case "FAIL":
-          // user tranasctions rearly fail normally, but sometimes they do. We perform manual deposit in such case
-          shouldPerformManualDeposit = true;
-          break;
-        case null:
-          shouldPerformManualDeposit = true;
-          break;
-        default: {
-          const _impossible: never = someDepositResult;
-          throw new Error(`Unexpected status ${someDepositResult["status"]}`);
+      let shouldPerformManualDeposit: boolean = true;
+      if (someDepositResult.status === "OK") {
+        this.recordDepositResult(someDepositResult);
+        const timeSinceLastDeposit = currentBlockchainTimestamp - someDepositResult.timestampL1;
+        if (timeSinceLastDeposit * SEC > this.txTriggerDelayMs) {
+          winston.info(
+            `[depositUser] Last users deposit was successful, but it was ${timeSinceLastDeposit} seconds ago. Will execute deposit tx manually.`
+          );
+        } else {
+          shouldPerformManualDeposit = false;
         }
       }
+
       if (shouldPerformManualDeposit) {
         winston.info("[depositUser] Checking for last MANUAL deposit...");
         const lastOurExecution = await this.getLastExecution(this.wallet.address);
@@ -179,16 +168,17 @@ export class DepositUserFlow extends DepositBaseFlow {
               case "FAIL":
                 winston.error(
                   `[depositUser] Deposit failed on try ${attempt + 1}/${DEPOSIT_RETRY_LIMIT}` +
-                  (attempt + 1 != DEPOSIT_RETRY_LIMIT
-                    ? `, retrying in ${(DEPOSIT_RETRY_INTERVAL / 1000).toFixed(0)} seconds`
-                    : "")
+                    (attempt + 1 != DEPOSIT_RETRY_LIMIT
+                      ? `, retrying in ${(DEPOSIT_RETRY_INTERVAL / 1000).toFixed(0)} seconds`
+                      : "")
                 );
                 attempt++;
                 await timeoutPromise(DEPOSIT_RETRY_INTERVAL);
                 break;
-              default:
+              default: {
                 const _impossible: never = result;
                 throw new Error(`Unexpected result ${result}`);
+              }
             }
             if (result === "OK") {
               break;
