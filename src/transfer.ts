@@ -3,11 +3,10 @@ import winston from "winston";
 import { utils } from "zksync-ethers";
 
 import { L2_EXECUTION_TIMEOUT } from "./configs";
-import { FlowMetricRecorder } from "./flowMetric";
+import { FlowMetricRecorder, StatusNoSkip } from "./flowMetric";
 import { SEC, timeoutPromise, unwrap } from "./utils";
 
 import type { Mutex } from "./lock";
-import type { StatusNoSkip } from "./flowMetric";
 import type { types, Provider, Wallet } from "zksync-ethers";
 
 const FLOW_RETRY_LIMIT = +(process.env.FLOW_RETRY_LIMIT ?? 5);
@@ -91,12 +90,12 @@ export class SimpleTxFlow {
       }); // included in a block
 
       this.metricRecorder.recordFlowSuccess();
-      return "OK";
+      return StatusNoSkip.OK;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       winston.error("simple tx error: " + error?.message, error?.stack);
       this.metricRecorder.recordFlowFailure();
-      return "FAIL";
+      return StatusNoSkip.FAIL;
     }
   }
 
@@ -105,7 +104,7 @@ export class SimpleTxFlow {
       const nextExecutionWait = timeoutPromise(this.intervalMs);
       for (let i = 0; i < FLOW_RETRY_LIMIT; i++) {
         const result = await this.l2WalletLock.withLock(() => this.step());
-        if (result === "OK") {
+        if (result === StatusNoSkip.OK) {
           winston.info(`[transfer] attempt ${i + 1} succeeded`);
           break;
         } else {

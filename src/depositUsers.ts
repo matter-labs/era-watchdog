@@ -10,11 +10,10 @@ import {
   DepositBaseFlow,
   STEPS,
 } from "./depositBase";
-import { FlowMetricRecorder } from "./flowMetric";
+import { FlowMetricRecorder, Status } from "./flowMetric";
 import { SEC, timeoutPromise, unwrap } from "./utils";
 
 import type { ExecutionResultKnown } from "./depositBase";
-import type { Status } from "./flowMetric";
 import type { Wallet } from "zksync-ethers";
 import type { IL1ERC20Bridge, IL1SharedBridge } from "zksync-ethers/build/typechain";
 
@@ -45,7 +44,7 @@ export class DepositUserFlow extends DepositBaseFlow {
   }
 
   private recordDepositResult(result: ExecutionResultKnown) {
-    if (result.status === "OK") {
+    if (result.status === Status.OK) {
       this.metricRecorder.manualRecordStatus(result.status, unwrap(result.timestampL2) - result.timestampL1);
       this.metricRecorder.manualRecordStepCompletion(
         STEPS.l1_execution,
@@ -75,7 +74,7 @@ export class DepositUserFlow extends DepositBaseFlow {
           result.l2Receipt?.hash
         }`
       );
-    } else if (result.status === "FAIL") {
+    } else if (result.status === Status.FAIL) {
       winston.info(
         `[depositUser] Reported failed deposit. L1 hash: ${result.l1Receipt.hash}, L2 hash: ${result.l2Receipt?.hash}`
       );
@@ -95,8 +94,8 @@ export class DepositUserFlow extends DepositBaseFlow {
         winston.error(
           `[depositUser] Gas price ${maxFeePerGas} is higher than limit ${DEPOSIT_L1_GAS_PRICE_LIMIT_GWEI}, skipping watchdog deposit`
         );
-        this.metricRecorder.manualRecordStatus("SKIP", 0);
-        return "SKIP";
+        this.metricRecorder.manualRecordStatus(Status.SKIP, 0);
+        return Status.SKIP;
       }
       const depositHandle = await this.wallet.deposit({
         ...this.getDepositRequest(),
@@ -123,8 +122,8 @@ export class DepositUserFlow extends DepositBaseFlow {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       winston.error("[depositUser] watchdog deposit tx error: " + error?.message, error?.stack);
-      this.metricRecorder.manualRecordStatus("FAIL", 0);
-      return "FAIL";
+      this.metricRecorder.manualRecordStatus(Status.FAIL, 0);
+      return Status.FAIL;
     }
   }
 
@@ -135,7 +134,7 @@ export class DepositUserFlow extends DepositBaseFlow {
       const someDepositResult = await this.getLastExecution(void 0);
       // we only report OK. On fail we want perform a deposit manually as we cannot rely on users doing deposits properly
       let shouldPerformManualDeposit: boolean = true;
-      if (someDepositResult.status === "OK") {
+      if (someDepositResult.status === Status.OK) {
         this.recordDepositResult(someDepositResult);
         const timeSinceLastDeposit = currentBlockchainTimestamp - someDepositResult.timestampL1;
         if (timeSinceLastDeposit * SEC > this.txTriggerDelayMs) {
@@ -159,13 +158,13 @@ export class DepositUserFlow extends DepositBaseFlow {
           while (attempt < DEPOSIT_RETRY_LIMIT) {
             const result = await this.executeDepositTx();
             switch (result) {
-              case "OK":
+              case Status.OK:
                 winston.info(`[depositUser] attempt ${attempt + 1} succeeded`);
                 break;
-              case "SKIP":
+              case Status.SKIP:
                 winston.info(`[depositUser] attempt ${attempt + 1} skipped. Not counting towards retry limit`);
                 break;
-              case "FAIL":
+              case Status.FAIL:
                 winston.error(
                   `[depositUser] Deposit failed on try ${attempt + 1}/${DEPOSIT_RETRY_LIMIT}` +
                     (attempt + 1 != DEPOSIT_RETRY_LIMIT
@@ -180,7 +179,7 @@ export class DepositUserFlow extends DepositBaseFlow {
                 throw new Error(`Unexpected result ${result}`);
               }
             }
-            if (result === "OK") {
+            if (result === Status.OK) {
               break;
             }
           }

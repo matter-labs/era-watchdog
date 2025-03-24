@@ -3,9 +3,9 @@ import { id } from "ethers";
 import winston from "winston";
 import { utils } from "zksync-ethers";
 
+import { StatusNoSkip } from "./flowMetric";
 import { MIN, SEC, unwrap } from "./utils";
 
-import type { StatusNoSkip } from "./flowMetric";
 import type { BigNumberish, BytesLike, Overrides, TransactionReceipt } from "ethers";
 import type { types, Wallet } from "zksync-ethers";
 import type { IL1ERC20Bridge, IL1SharedBridge } from "zksync-ethers/build/typechain";
@@ -131,13 +131,13 @@ export abstract class DepositBaseFlow {
       winston.error(`[${this.flowName}] ${event.transactionHash} not executed on l2: ${l2TxHash} `);
       return {
         ...l1Res,
-        status: "FAIL",
+        status: StatusNoSkip.FAIL,
       };
     } else if (l2Receipt.status != 1) {
       winston.error(`[${this.flowName}] ${event.transactionHash} failed on l2: ${l2TxHash} `);
       return {
         ...l1Res,
-        status: "FAIL",
+        status: StatusNoSkip.FAIL,
       };
     } else {
       const timestampL2 = (await l2Receipt.getBlock()).timestamp;
@@ -148,7 +148,7 @@ export abstract class DepositBaseFlow {
         ...l1Res,
         l2Receipt,
         timestampL2,
-        status: "OK",
+        status: StatusNoSkip.OK,
       };
     }
   }

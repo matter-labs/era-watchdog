@@ -13,10 +13,9 @@ import {
   PRIORITY_OP_TIMEOUT,
   STEPS,
 } from "./depositBase";
-import { FlowMetricRecorder } from "./flowMetric";
+import { FlowMetricRecorder, Status } from "./flowMetric";
 import { SEC, MIN, unwrap, timeoutPromise } from "./utils";
 
-import type { Status } from "./flowMetric";
 import type { BigNumberish, BytesLike, Overrides } from "ethers";
 import type { Wallet } from "zksync-ethers";
 import type { IL1ERC20Bridge, IL1SharedBridge } from "zksync-ethers/build/typechain";
@@ -106,7 +105,7 @@ export class DepositFlow extends DepositBaseFlow {
           `[deposit] Gas price ${populatedWithOverrides.overrides.maxFeePerGas} is higher than limit ${DEPOSIT_L1_GAS_PRICE_LIMIT_GWEI}. Skipping deposit`
         );
         this.metricRecorder.recordFlowSkipped();
-        return "SKIP";
+        return Status.SKIP;
       }
 
       // send L1 deposit transaction
@@ -150,12 +149,12 @@ export class DepositFlow extends DepositBaseFlow {
       winston.info(`[deposit] Tx ${txHashs} mined on L2`);
 
       this.metricRecorder.recordFlowSuccess();
-      return "OK";
+      return Status.OK;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       winston.error("deposit tx error: " + error?.message, error?.stack);
       this.metricRecorder.recordFlowFailure();
-      return "FAIL";
+      return Status.FAIL;
     }
   }
 
@@ -175,13 +174,13 @@ export class DepositFlow extends DepositBaseFlow {
       while (attempt <= DEPOSIT_RETRY_LIMIT) {
         const result = await this.executeWatchdogDeposit();
         switch (result) {
-          case "OK":
+          case Status.OK:
             winston.info(`[deposit] attempt ${attempt} succeeded`);
             break;
-          case "SKIP":
+          case Status.SKIP:
             winston.info(`[deposit] attempt ${attempt} skipped (not counted towards limit)`);
             break;
-          case "FAIL": {
+          case Status.FAIL: {
             attempt++;
             winston.warn(
               `[deposit] attempt ${attempt} of ${DEPOSIT_RETRY_LIMIT} failed` +
@@ -197,7 +196,7 @@ export class DepositFlow extends DepositBaseFlow {
             throw new Error(`Unreachable code branch: ${_exhaustiveCheck}`);
           }
         }
-        if (result == "OK") break;
+        if (result == Status.OK) break;
       }
       await nextExecutionWait;
     }

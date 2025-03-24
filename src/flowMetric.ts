@@ -3,8 +3,17 @@ import winston from "winston";
 
 import { withTimeout } from "./utils";
 
-export type StatusNoSkip = "OK" | "FAIL";
-export type Status = StatusNoSkip | "SKIP";
+export const StatusNoSkip = {
+  OK: "OK",
+  FAIL: "FAIL",
+} as const;
+export type StatusNoSkip = (typeof StatusNoSkip)[keyof typeof StatusNoSkip];
+
+export const Status = {
+  ...StatusNoSkip,
+  SKIP: "SKIP",
+} as const;
+export type Status = (typeof Status)[keyof typeof Status];
 
 /// singleton for metric storage
 class FlowMetricStore {
@@ -135,8 +144,8 @@ export class FlowMetricRecorder {
   /// MANUAL FUNCTIONS
   /// Needed for recording based solly on onchain data
   public manualRecordStatus(status: Status, latencyTotalSec: number) {
-    store.metric_status.set({ flow: this.flowName }, status === "OK" ? 1 : 0);
-    if (status === "OK") {
+    store.metric_status.set({ flow: this.flowName }, status === Status.OK ? 1 : 0);
+    if (status === Status.OK) {
       store.metric_latency_total.set({ flow: this.flowName }, latencyTotalSec);
       this._lastExecutionTotalLatency = latencyTotalSec;
     }
@@ -163,11 +172,11 @@ export class FlowMetricRecorder {
 
   public recordPreviousExecutionStatus(status: StatusNoSkip) {
     switch (status) {
-      case "OK": {
+      case Status.OK: {
         store.metric_status.set({ flow: this.flowName }, 1);
         break;
       }
-      case "FAIL": {
+      case Status.FAIL: {
         store.metric_status.set({ flow: this.flowName }, 0);
         break;
       }
