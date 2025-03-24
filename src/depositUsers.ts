@@ -91,7 +91,7 @@ export class DepositUserFlow extends DepositBaseFlow {
       const feeData = await this.wallet._providerL1().getFeeData();
       const maxFeePerGas = unwrap(feeData.maxFeePerGas);
       if (maxFeePerGas > DEPOSIT_L1_GAS_PRICE_LIMIT_GWEI) {
-        winston.error(
+        winston.warn(
           `[depositUser] Gas price ${maxFeePerGas} is higher than limit ${DEPOSIT_L1_GAS_PRICE_LIMIT_GWEI}, skipping watchdog deposit`
         );
         this.metricRecorder.manualRecordStatus(Status.SKIP, 0);
@@ -172,7 +172,6 @@ export class DepositUserFlow extends DepositBaseFlow {
                       : "")
                 );
                 attempt++;
-                await timeoutPromise(DEPOSIT_RETRY_INTERVAL);
                 break;
               default: {
                 const _impossible: never = result;
@@ -182,6 +181,7 @@ export class DepositUserFlow extends DepositBaseFlow {
             if (result === Status.OK) {
               break;
             }
+            await timeoutPromise(DEPOSIT_RETRY_INTERVAL);
           }
         } else {
           winston.info(
