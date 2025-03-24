@@ -69,11 +69,7 @@ const main = async () => {
     const l1ProviderForWithdrawal = new Provider(unwrap(process.env.CHAIN_L1_RPC_URL));
     const walletForWithdrawals = new Wallet(unwrap(process.env.WALLET_KEY), l2Provider, l1ProviderForWithdrawal);
 
-    new WithdrawalFinalizeFlow(
-      walletForWithdrawals,
-      paymasterAddress,
-      +unwrap(process.env.FLOW_WITHDRAWAL_FINALIZE_INTERVAL)
-    ).run();
+    new WithdrawalFinalizeFlow(walletForWithdrawals, +unwrap(process.env.FLOW_WITHDRAWAL_FINALIZE_INTERVAL)).run();
     enabledFlows++;
   }
   winston.info(`Enabled ${enabledFlows} flows`);

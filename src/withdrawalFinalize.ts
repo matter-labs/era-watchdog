@@ -23,10 +23,9 @@ export class WithdrawalFinalizeFlow extends WithdrawalBaseFlow {
 
   constructor(
     wallet: Wallet,
-    paymasterAddress: string | undefined,
     private intervalMs: number = FINALIZE_INTERVAL
   ) {
-    super(wallet, paymasterAddress, FLOW_NAME);
+    super(wallet, undefined, FLOW_NAME);
     this.metricRecorder = new FlowMetricRecorder(FLOW_NAME);
     this.metricTimeSinceLastFinalizableWithdrawal = new Gauge({
       name: "watchdog_time_since_last_finalizable_withdrawal",
