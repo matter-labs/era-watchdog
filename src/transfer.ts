@@ -7,6 +7,7 @@ import { FlowMetricRecorder } from "./flowMetric";
 import { SEC, timeoutPromise, unwrap } from "./utils";
 
 import type { STATUS } from "./flowMetric";
+import type { Mutex } from "./lock";
 import type { types, Provider, Wallet } from "zksync-ethers";
 
 const FLOW_RETRY_LIMIT = +(process.env.FLOW_RETRY_LIMIT ?? 5);
@@ -18,6 +19,7 @@ export class SimpleTxFlow {
   constructor(
     private provider: Provider,
     private wallet: Wallet,
+    private l2WalletLock: Mutex,
     private paymasterAddress: string | undefined,
     private intervalMs: number
   ) {
@@ -102,7 +104,7 @@ export class SimpleTxFlow {
     while (true) {
       const nextExecutionWait = timeoutPromise(this.intervalMs);
       for (let i = 0; i < FLOW_RETRY_LIMIT; i++) {
-        const result = await this.step();
+        const result = await this.l2WalletLock.withLock(() => this.step());
         if (result === "OK") {
           winston.info(`[transfer] attempt ${i + 1} succeeded`);
           break;

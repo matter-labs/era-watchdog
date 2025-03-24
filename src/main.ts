@@ -7,6 +7,7 @@ import { Provider, Wallet } from "zksync-ethers";
 
 import { DepositFlow } from "./deposit";
 import { DepositUserFlow } from "./depositUsers";
+import { Mutex } from "./lock";
 import { setupLogger } from "./logger";
 import { SimpleTxFlow } from "./transfer";
 import { unwrap } from "./utils";
@@ -18,13 +19,20 @@ const main = async () => {
   const l2Provider = new Provider(unwrap(process.env.CHAIN_RPC_URL));
   const wallet = new Wallet(unwrap(process.env.WALLET_KEY), l2Provider);
   const paymasterAddress = process.env.PAYMASTER_ADDRESS;
+  const l2WalletLock = new Mutex();
 
   winston.info(
     `Wallet ${wallet.address} L2 balance is ${ethers.formatEther(await l2Provider.getBalance(wallet.address))}`
   );
   let enabledFlows = 0;
   if (process.env.FLOW_TRANSFER_ENABLE === "1") {
-    new SimpleTxFlow(l2Provider, wallet, paymasterAddress, +unwrap(process.env.FLOW_TRANSFER_INTERVAL)).run();
+    new SimpleTxFlow(
+      l2Provider,
+      wallet,
+      l2WalletLock,
+      paymasterAddress,
+      +unwrap(process.env.FLOW_TRANSFER_INTERVAL)
+    ).run();
     enabledFlows++;
   }
 
@@ -60,7 +68,7 @@ const main = async () => {
     }
   }
   if (process.env.FLOW_WITHDRAWAL_ENABLE === "1") {
-    new WithdrawalFlow(wallet, paymasterAddress, +unwrap(process.env.FLOW_WITHDRAWAL_INTERVAL)).run();
+    new WithdrawalFlow(wallet, paymasterAddress, l2WalletLock, +unwrap(process.env.FLOW_WITHDRAWAL_INTERVAL)).run();
     enabledFlows++;
   }
   if (process.env.FLOW_WITHDRAWAL_FINALIZE_ENABLE === "1") {

@@ -8,6 +8,7 @@ import { SEC, unwrap, timeoutPromise } from "./utils";
 import { WITHDRAWAL_RETRY_INTERVAL, WITHDRAWAL_RETRY_LIMIT, WithdrawalBaseFlow, STEPS } from "./withdrawalBase";
 
 import type { STATUS } from "./flowMetric";
+import type { Mutex } from "./lock";
 import type { Wallet } from "zksync-ethers";
 
 const FLOW_NAME = "withdrawal";
@@ -18,6 +19,7 @@ export class WithdrawalFlow extends WithdrawalBaseFlow {
   constructor(
     wallet: Wallet,
     paymasterAddress: string | undefined,
+    private l2WalletLock: Mutex,
     private intervalMs: number
   ) {
     super(wallet, paymasterAddress, FLOW_NAME);
@@ -90,7 +92,7 @@ export class WithdrawalFlow extends WithdrawalBaseFlow {
     while (true) {
       const nextExecutionWait = timeoutPromise(this.intervalMs);
       for (let i = 0; i < WITHDRAWAL_RETRY_LIMIT; i++) {
-        const result = await this.executeWatchdogWithdrawal();
+        const result = await this.l2WalletLock.withLock(() => this.executeWatchdogWithdrawal());
         if (result === "FAIL") {
           winston.warn(
             `[withdrawal] attempt ${i + 1} of ${WITHDRAWAL_RETRY_LIMIT} failed` +
