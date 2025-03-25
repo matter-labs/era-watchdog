@@ -45,12 +45,13 @@ yarn run start
         - `FLOW_DEPOSIT_RETRY_INTERVAL` -- deposit retry interval in ms (default to 5 minutes)
         - `FLOW_DEPOSIT_RETRY_LIMIT` -- deposit retry limit (default to 3)
         - `FLOW_DEPOSIT_L2_TIMEOUT` -- timeout of l2 deposit confirmation in ms
+        - `FLOW_DEPOSIT_L1_GAS_PRICE_LIMIT_GWEI` -- gas price limit in gwei for l1 deposit transaction. If its exceeded in **estimation** the flow will skip
         - `MAX_LOGS_BLOCKS` -- max number of blocks in range of `eth_getLogs` request
     - deposit user flow: (observes onchain transaction and performs deposit if no transaction is detected for certain time)
         - `FLOW_DEPOSIT_USER_ENABLE` -- set to `1` to enable deposit user flow
         - `FLOW_DEPOSIT_USER_INTERVAL` -- deposit user flow interval in ms (frequency of quaring latest deposit)
         - `FLOW_DEPOSIT_USER_TX_TRIGGER_DELAY` -- delay in ms after which deposit user flow will trigger deposit transaction from watchdog wallet
-        - `FLOW_DEPOSIT_L2_TIMEOUT`, `MAX_LOGS_BLOCKS`, `FLOW_DEPOSIT_RETRY_INTERVAL`, `FLOW_DEPOSIT_RETRY_LIMIT` shared with deposit flow
+        - `FLOW_DEPOSIT_L2_TIMEOUT`, `MAX_LOGS_BLOCKS`, `FLOW_DEPOSIT_RETRY_INTERVAL`, `FLOW_DEPOSIT_RETRY_LIMIT`, `FLOW_DEPOSIT_L1_GAS_PRICE_LIMIT_GWEI` shared with deposit flow
     - withdrawal flow: (performs only the L2 transaction of a withdrawal)
         - `FLOW_WITHDRAWAL_ENABLE` -- set to `1` to enable withdrawal flow
         - `FLOW_WITHDRAWAL_INTERVAL` -- withdrawal flow interval in ms

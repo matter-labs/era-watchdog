@@ -6,16 +6,16 @@ import { utils } from "zksync-ethers";
 import { ETH_ADDRESS_IN_CONTRACTS } from "zksync-ethers/build/utils";
 
 import {
+  DEPOSIT_L1_GAS_PRICE_LIMIT_GWEI,
   DEPOSIT_RETRY_INTERVAL,
   DEPOSIT_RETRY_LIMIT,
   DepositBaseFlow,
   PRIORITY_OP_TIMEOUT,
   STEPS,
 } from "./depositBase";
-import { FlowMetricRecorder } from "./flowMetric";
+import { FlowMetricRecorder, Status } from "./flowMetric";
 import { SEC, MIN, unwrap, timeoutPromise } from "./utils";
 
-import type { STATUS } from "./flowMetric";
 import type { BigNumberish, BytesLike, Overrides } from "ethers";
 import type { Wallet } from "zksync-ethers";
 import type { IL1ERC20Bridge, IL1SharedBridge } from "zksync-ethers/build/typechain";
@@ -53,7 +53,7 @@ export class DepositFlow extends DepositBaseFlow {
     this.metricRecorder = new FlowMetricRecorder(FLOW_NAME);
   }
 
-  protected async executeWatchdogDeposit(): Promise<STATUS> {
+  protected async executeWatchdogDeposit(): Promise<Status> {
     try {
       // even before flow start we check base token allowence and perform an infinitite approve if needed
       if (this.baseToken != ETH_ADDRESS_IN_CONTRACTS) {
@@ -75,16 +75,21 @@ export class DepositFlow extends DepositBaseFlow {
       const populatedWithOverrides = await this.metricRecorder.stepExecution({
         stepName: STEPS.estimation,
         stepTimeoutMs: 30 * SEC,
-        fn: async ({ recordStepGas }) => {
+        fn: async ({ recordStepGas, recordStepGasCost, recordStepGasPrice }) => {
           const populated: L2Request = await this.wallet.getDepositTx(this.getDepositRequest());
           const estimatedGas = await this.wallet.estimateGasRequestExecute(populated);
           const nonce = await this.wallet._signerL1().getNonce("latest");
+          const feeData = await this.wallet._providerL1().getFeeData();
           recordStepGas(estimatedGas);
+          recordStepGasPrice(unwrap(feeData.maxFeePerGas));
+          recordStepGasCost(estimatedGas * unwrap(feeData.maxFeePerGas));
           return {
             ...populated,
             overrides: {
               gasLimit: estimatedGas,
               nonce,
+              maxFeePerGas: unwrap(feeData.maxFeePerGas), // we expect to be post EIP-1559
+              maxPriorityFeePerGas: unwrap(feeData.maxPriorityFeePerGas),
             },
           };
         },
@@ -95,6 +100,13 @@ export class DepositFlow extends DepositBaseFlow {
         STEPS.l2_estimation,
         BigInt(unwrap(populatedWithOverrides.mintValue)) - BigInt(unwrap(populatedWithOverrides.l2Value))
       );
+      if (populatedWithOverrides.overrides.maxFeePerGas > DEPOSIT_L1_GAS_PRICE_LIMIT_GWEI) {
+        winston.warn(
+          `[deposit] Gas price ${populatedWithOverrides.overrides.maxFeePerGas} is higher than limit ${DEPOSIT_L1_GAS_PRICE_LIMIT_GWEI}. Skipping deposit`
+        );
+        this.metricRecorder.recordFlowSkipped();
+        return Status.SKIP;
+      }
 
       // send L1 deposit transaction
       const depositHandle = await this.metricRecorder.stepExecution({
@@ -137,12 +149,12 @@ export class DepositFlow extends DepositBaseFlow {
       winston.info(`[deposit] Tx ${txHashs} mined on L2`);
 
       this.metricRecorder.recordFlowSuccess();
-      return "OK";
+      return Status.OK;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
       winston.error("deposit tx error: " + error?.message, error?.stack);
       this.metricRecorder.recordFlowFailure();
-      return "FAIL";
+      return Status.FAIL;
     }
   }
 
@@ -158,20 +170,33 @@ export class DepositFlow extends DepositBaseFlow {
     }
     while (true) {
       const nextExecutionWait = timeoutPromise(this.intervalMs);
-      for (let i = 0; i < DEPOSIT_RETRY_LIMIT; i++) {
+      let attempt: number = 1;
+      while (attempt <= DEPOSIT_RETRY_LIMIT) {
         const result = await this.executeWatchdogDeposit();
-        if (result === "FAIL") {
-          winston.warn(
-            `[deposit] attempt ${i + 1} of ${DEPOSIT_RETRY_LIMIT} failed` +
-              (i + 1 != DEPOSIT_RETRY_LIMIT
-                ? `, retrying in ${(DEPOSIT_RETRY_INTERVAL / 1000).toFixed(0)} seconds`
-                : "")
-          );
-          await timeoutPromise(DEPOSIT_RETRY_INTERVAL);
-        } else {
-          winston.info(`[deposit] attempt ${i + 1} succeeded`);
-          break;
+        switch (result) {
+          case Status.OK:
+            winston.info(`[deposit] attempt ${attempt} succeeded`);
+            break;
+          case Status.SKIP:
+            winston.info(`[deposit] attempt ${attempt} skipped (not counted towards limit)`);
+            break;
+          case Status.FAIL: {
+            attempt++;
+            winston.warn(
+              `[deposit] attempt ${attempt} of ${DEPOSIT_RETRY_LIMIT} failed` +
+                (attempt != DEPOSIT_RETRY_LIMIT
+                  ? `, retrying in ${(DEPOSIT_RETRY_INTERVAL / 1000).toFixed(0)} seconds`
+                  : "")
+            );
+            await timeoutPromise(DEPOSIT_RETRY_INTERVAL);
+            break;
+          }
+          default: {
+            const _exhaustiveCheck: never = result;
+            throw new Error(`Unreachable code branch: ${_exhaustiveCheck}`);
+          }
         }
+        if (result == Status.OK) break;
       }
       await nextExecutionWait;
     }
