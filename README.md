@@ -9,7 +9,31 @@ distinguish genuine low activity from outages. Knowing whether the chain is
 healthy or not is important given the potential for sudden increases in activity
 and the need for the chain to be able to handle those changes seamlessly.
 
-For more details, please see the [design doc](https://www.notion.so/matterlabs/Era-Watchdog-e7ff2347c1cc4a2fa69de08d36caef16?pvs=4).
+## Operation
+
+Watchdog consists of various flows. Each one exports its status in `watchdog_status` metric. This status always reflects the result of last run. "1" indicates success, "0.5" skipped run due to gas conditions, "0" failure. On failed runs flows may retry before normal interval depending on configuration. Alerts should be normally setup to trigger after status is "0" (failure) for over 1-5 minutes.
+
+### Flows
+
+#### Transfer
+
+Performs 1 wei transaction on L2. Uses paymaster if configured (transfers 0 wei in that case).
+
+#### Deposit
+
+Deposits 1 wei of base token from L1 to L2. Wait for deposit to be executed on L2. Due to performing L1 transaction this flow is quite costly to run. On watchdog start time till first run is based on last execution fetched from L1 logs.
+
+#### Deposit user
+
+Observes onchain deposit transaction and performs deposit (1 wei) if no transaction is detected for certain time or if last transaction failed. This flow was created to give some assurence of proper L1->L2 operation even with low frequence of deposit flow as L1->L2 operations are costly.
+
+#### Withdrawal
+
+Withdraws 1 wei from L2 to L1. Does not perform finalization transaction.
+
+#### Withdrawal finalize
+
+Simulates (eth_gasEstimate) finalization of the latest watchdog withdrawal for validation on L1. Peforming the actual finalization is not useful as it would be costly and would test "L1".
 
 ## Running the Service
 
@@ -47,17 +71,17 @@ yarn run start
         - `FLOW_DEPOSIT_L2_TIMEOUT` -- timeout of l2 deposit confirmation in ms
         - `FLOW_DEPOSIT_L1_GAS_PRICE_LIMIT_GWEI` -- gas price limit in gwei for l1 deposit transaction. If its exceeded in **estimation** the flow will skip
         - `MAX_LOGS_BLOCKS` -- max number of blocks in range of `eth_getLogs` request
-    - deposit user flow: (observes onchain transaction and performs deposit if no transaction is detected for certain time)
+    - deposit user flow:
         - `FLOW_DEPOSIT_USER_ENABLE` -- set to `1` to enable deposit user flow
         - `FLOW_DEPOSIT_USER_INTERVAL` -- deposit user flow interval in ms (frequency of quaring latest deposit)
         - `FLOW_DEPOSIT_USER_TX_TRIGGER_DELAY` -- delay in ms after which deposit user flow will trigger deposit transaction from watchdog wallet
         - `FLOW_DEPOSIT_L2_TIMEOUT`, `MAX_LOGS_BLOCKS`, `FLOW_DEPOSIT_RETRY_INTERVAL`, `FLOW_DEPOSIT_RETRY_LIMIT`, `FLOW_DEPOSIT_L1_GAS_PRICE_LIMIT_GWEI` shared with deposit flow
-    - withdrawal flow: (performs only the L2 transaction of a withdrawal)
+    - withdrawal flow:
         - `FLOW_WITHDRAWAL_ENABLE` -- set to `1` to enable withdrawal flow
         - `FLOW_WITHDRAWAL_INTERVAL` -- withdrawal flow interval in ms
         - `FLOW_WITHDRAWAL_RETRY_LIMIT` -- number of retries for withdrawal flow (defaults to 10)
         - `FLOW_WITHDRAWAL_RETRY_INTERVAL` -- interval between retries in ms (defaults to 30sec)
-    - withdrawal finalize flow: (simulates finalization of the latest withdrawal for validation)
+    - withdrawal finalize flow:
         - `FLOW_WITHDRAWAL_FINALIZE_ENABLE` -- set to `1` to enable withdrawal finalize flow
         - `FLOW_WITHDRAWAL_FINALIZE_INTERVAL` -- withdrawal finalize flow interval in ms (defaults to 15 minutes)
         - `PRE_V26_BRIDGES` -- set to `1` to use pre-v26 bridges (`withdrawalFinalize` requiring `legacySharedBridge` called through `BridgeHub` instead of `L1Nullifier` `depositFinalized` called directly)
