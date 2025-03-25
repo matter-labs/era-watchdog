@@ -42,6 +42,7 @@ export const STEPS = {
   estimation: "estimation",
   send: "send",
   l1_execution: "l1_execution",
+  l2_estimation: "l2_estimation", //dummy step, no actual execution time reported
   l2_execution: "l2_execution",
 };
 

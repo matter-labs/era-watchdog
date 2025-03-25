@@ -89,6 +89,12 @@ export class DepositFlow extends DepositBaseFlow {
           };
         },
       });
+      // record l2 estimates using the manual record function
+      this.metricRecorder.manualRecordStepGas(STEPS.l2_estimation, unwrap(populatedWithOverrides.l2GasLimit));
+      this.metricRecorder.manualRecordStepGasCost(
+        STEPS.l2_estimation,
+        BigInt(unwrap(populatedWithOverrides.mintValue)) - BigInt(unwrap(populatedWithOverrides.l2Value))
+      );
 
       // send L1 deposit transaction
       const depositHandle = await this.metricRecorder.stepExecution({
@@ -121,15 +127,11 @@ export class DepositFlow extends DepositBaseFlow {
       await this.metricRecorder.stepExecution({
         stepName: STEPS.l2_execution,
         stepTimeoutMs: PRIORITY_OP_TIMEOUT,
-        fn: async ({ recordStepGas, recordStepGasCost }) => {
-          await depositHandle.wait(1);
-          // When performing a deposit
-          // we l2 gas limit set as checking actual gas used does not make sense
-          recordStepGas(BigInt(unwrap(populatedWithOverrides.l2GasLimit)));
-          // we used amount of minted tokens as a gas cost (minus transfered amount)
-          recordStepGasCost(
-            BigInt(unwrap(populatedWithOverrides.mintValue)) - BigInt(unwrap(populatedWithOverrides.l2Value))
-          );
+        fn: async ({ recordStepGasPrice, recordStepGas, recordStepGasCost }) => {
+          const receipt = await depositHandle.wait(1);
+          recordStepGasPrice(unwrap(receipt.gasPrice));
+          recordStepGas(unwrap(receipt.gasUsed));
+          recordStepGasCost(unwrap(receipt.gasUsed) * unwrap(receipt.gasPrice));
         },
       });
       winston.info(`[deposit] Tx ${txHashs} mined on L2`);
