@@ -3,11 +3,10 @@ import "dotenv/config";
 import winston from "winston";
 
 import { L2_EXECUTION_TIMEOUT } from "./configs";
-import { FlowMetricRecorder } from "./flowMetric";
+import { FlowMetricRecorder, StatusNoSkip } from "./flowMetric";
 import { SEC, unwrap, timeoutPromise } from "./utils";
 import { WITHDRAWAL_RETRY_INTERVAL, WITHDRAWAL_RETRY_LIMIT, WithdrawalBaseFlow, STEPS } from "./withdrawalBase";
 
-import type { STATUS } from "./flowMetric";
 import type { Mutex } from "./lock";
 import type { Wallet } from "zksync-ethers";
 
@@ -26,7 +25,7 @@ export class WithdrawalFlow extends WithdrawalBaseFlow {
     this.metricRecorder = new FlowMetricRecorder(FLOW_NAME);
   }
 
-  protected async executeWatchdogWithdrawal(): Promise<STATUS> {
+  protected async executeWatchdogWithdrawal(): Promise<StatusNoSkip> {
     try {
       this.metricRecorder.recordFlowStart();
 
@@ -71,11 +70,11 @@ export class WithdrawalFlow extends WithdrawalBaseFlow {
 
       winston.info(`[withdrawal] Tx (L2: ${withdrawalHandle.hash}) included in L2 block`);
       this.metricRecorder.recordFlowSuccess();
-      return "OK";
+      return StatusNoSkip.OK;
     } catch (e) {
       winston.error(`[withdrawal] Error during flow execution: ${unwrap(e)}`);
       this.metricRecorder.recordFlowFailure();
-      return "FAIL";
+      return StatusNoSkip.FAIL;
     }
   }
 
@@ -83,7 +82,7 @@ export class WithdrawalFlow extends WithdrawalBaseFlow {
     const lastExecution = await this.getLastExecution("latest", this.wallet.address);
     const currentBlockchainTimestamp = await this.getCurrentChainTimestamp();
     const timeSinceLastWithdrawalSec = currentBlockchainTimestamp - (lastExecution?.timestampL2 ?? 0);
-    if (lastExecution != null) this.metricRecorder.recordPreviousExecutionStatus("OK");
+    if (lastExecution != null) this.metricRecorder.recordPreviousExecutionStatus(StatusNoSkip.OK);
     if (timeSinceLastWithdrawalSec < this.intervalMs / SEC) {
       const waitTime = this.intervalMs - timeSinceLastWithdrawalSec * SEC;
       winston.info(`Waiting ${(waitTime / 1000).toFixed(0)} seconds before starting withdrawal flow`);
@@ -93,7 +92,7 @@ export class WithdrawalFlow extends WithdrawalBaseFlow {
       const nextExecutionWait = timeoutPromise(this.intervalMs);
       for (let i = 0; i < WITHDRAWAL_RETRY_LIMIT; i++) {
         const result = await this.l2WalletLock.withLock(() => this.executeWatchdogWithdrawal());
-        if (result === "FAIL") {
+        if (result === StatusNoSkip.FAIL) {
           winston.warn(
             `[withdrawal] attempt ${i + 1} of ${WITHDRAWAL_RETRY_LIMIT} failed` +
               (i + 1 != WITHDRAWAL_RETRY_LIMIT
