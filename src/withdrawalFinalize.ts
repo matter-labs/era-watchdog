@@ -4,7 +4,7 @@ import { Gauge } from "prom-client";
 import winston from "winston";
 import { L2_BASE_TOKEN_ADDRESS, isAddressEq } from "zksync-ethers/build/utils";
 
-import { FlowMetricRecorder, StatusNoSkip } from "./flowMetric";
+import { FlowMetricRecorder, Status } from "./flowMetric";
 import { SEC, MIN, unwrap, timeoutPromise } from "./utils";
 import { WithdrawalBaseFlow, STEPS } from "./withdrawalBase";
 
@@ -36,7 +36,7 @@ export class WithdrawalFinalizeFlow extends WithdrawalBaseFlow {
     });
   }
 
-  protected async executeWithdrawalFinalize(): Promise<StatusNoSkip> {
+  protected async executeWithdrawalFinalize(): Promise<Status> {
     try {
       const execution = await this.getLastExecution("finalized", this.wallet.address);
       const blockTimestamp = await this.getCurrentChainTimestamp();
@@ -44,9 +44,9 @@ export class WithdrawalFinalizeFlow extends WithdrawalBaseFlow {
       this.metricRecorder.recordFlowStart();
 
       if (!execution) {
-        winston.error(`[${FLOW_NAME}] No withdrawal found to try finalize`);
-        this.metricRecorder.recordFlowFailure();
-        return StatusNoSkip.FAIL;
+        winston.warn(`[${FLOW_NAME}] No withdrawal found to try finalize`);
+        this.metricRecorder.recordFlowSkipped();
+        return Status.SKIP;
       }
       const withdrawalHash = execution.l2Receipt.hash;
 
@@ -96,11 +96,11 @@ export class WithdrawalFinalizeFlow extends WithdrawalBaseFlow {
       winston.info(`[${FLOW_NAME}] Finalization simulation for withdrawal ${withdrawalHash} successful`);
 
       this.metricRecorder.recordFlowSuccess();
-      return StatusNoSkip.OK;
+      return Status.OK;
     } catch (e) {
       winston.error(`[${FLOW_NAME}] Error during flow execution: ${unwrap(e)}`);
       this.metricRecorder.recordFlowFailure();
-      return StatusNoSkip.FAIL;
+      return Status.FAIL;
     }
   }
 
