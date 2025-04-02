@@ -1,6 +1,6 @@
 import "dotenv/config";
 
-import { formatEther, MaxInt256, parseEther } from "ethers";
+import { formatEther, MaxInt256, parseEther, toBigInt } from "ethers";
 import winston from "winston";
 import { utils } from "zksync-ethers";
 import { ETH_ADDRESS_IN_CONTRACTS } from "zksync-ethers/build/utils";
@@ -77,19 +77,19 @@ export class DepositFlow extends DepositBaseFlow {
         stepTimeoutMs: 30 * SEC,
         fn: async ({ recordStepGas, recordStepGasCost, recordStepGasPrice }) => {
           const populated: L2Request = await this.wallet.getDepositTx(this.getDepositRequest());
+          const maxFeePerGas = toBigInt(unwrap(populated.overrides?.maxFeePerGas)); // we expect the library to populate this field as we are post EIP-1559
           const estimatedGas = await this.wallet.estimateGasRequestExecute(populated);
           const nonce = await this.wallet._signerL1().getNonce("latest");
-          const feeData = await this.wallet._providerL1().getFeeData();
           recordStepGas(estimatedGas);
-          recordStepGasPrice(unwrap(feeData.maxFeePerGas));
-          recordStepGasCost(estimatedGas * unwrap(feeData.maxFeePerGas));
+          recordStepGasPrice(maxFeePerGas);
+          recordStepGasCost(estimatedGas * maxFeePerGas);
           return {
             ...populated,
             overrides: {
+              ...populated.overrides,
               gasLimit: estimatedGas,
               nonce,
-              maxFeePerGas: unwrap(feeData.maxFeePerGas), // we expect to be post EIP-1559
-              maxPriorityFeePerGas: unwrap(feeData.maxPriorityFeePerGas),
+              maxFeePerGas,
             },
           };
         },
