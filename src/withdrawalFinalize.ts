@@ -1,10 +1,9 @@
 import "dotenv/config";
 
 import { Gauge } from "prom-client";
-import winston from "winston";
 import { L2_BASE_TOKEN_ADDRESS, isAddressEq } from "zksync-ethers/build/utils";
 
-import { FlowMetricRecorder, Status } from "./flowMetric";
+import { Status } from "./flowMetric";
 import { SEC, MIN, unwrap, timeoutPromise } from "./utils";
 import { WithdrawalBaseFlow, STEPS } from "./withdrawalBase";
 
@@ -16,7 +15,6 @@ const FINALIZE_INTERVAL = +(process.env.FLOW_WITHDRAWAL_FINALIZE_INTERVAL ?? 15 
 const PRE_V26_BRIDGES = process.env.PRE_V26_BRIDGES === "1";
 
 export class WithdrawalFinalizeFlow extends WithdrawalBaseFlow {
-  private metricRecorder: FlowMetricRecorder;
   private metricTimeSinceLastFinalizableWithdrawal: Gauge;
   private metricTimeSinceLastFinalizedBlock: Gauge;
 
@@ -25,7 +23,6 @@ export class WithdrawalFinalizeFlow extends WithdrawalBaseFlow {
     private intervalMs: number = FINALIZE_INTERVAL
   ) {
     super(wallet, undefined, FLOW_NAME);
-    this.metricRecorder = new FlowMetricRecorder(FLOW_NAME);
     this.metricTimeSinceLastFinalizableWithdrawal = new Gauge({
       name: "watchdog_time_since_last_finalizable_withdrawal",
       help: "Blockchain second since last finalizable withdrawal transaction on L2",
@@ -35,7 +32,6 @@ export class WithdrawalFinalizeFlow extends WithdrawalBaseFlow {
       help: "Real second since last finalized block on L2",
     });
   }
-
   protected async executeWithdrawalFinalize(): Promise<Status> {
     try {
       const execution = await this.getLastExecution("finalized", this.wallet.address);
@@ -44,7 +40,7 @@ export class WithdrawalFinalizeFlow extends WithdrawalBaseFlow {
       this.metricRecorder.recordFlowStart();
 
       if (!execution) {
-        winston.warn(`[${FLOW_NAME}] No withdrawal found to try finalize`);
+        this.logger.warn("No withdrawal found to try finalize");
         this.metricRecorder.recordFlowSkipped();
         return Status.SKIP;
       }
@@ -53,7 +49,7 @@ export class WithdrawalFinalizeFlow extends WithdrawalBaseFlow {
       this.metricTimeSinceLastFinalizableWithdrawal.set(blockTimestamp - execution.timestampL2);
       this.metricTimeSinceLastFinalizedBlock.set(new Date().getTime() / 1000 - finalizedBlockTimestamp);
 
-      winston.info(`[${FLOW_NAME}] Simulating finalization for withdrawal hablockTimestampsh: ${withdrawalHash}`);
+      this.logger.info(`Simulating finalization for withdrawal hash: ${withdrawalHash}`);
 
       // Get finalization parameters
       const { l1BatchNumber, l2MessageIndex, l2TxNumberInBlock, message, sender, proof } =
@@ -66,9 +62,8 @@ export class WithdrawalFinalizeFlow extends WithdrawalBaseFlow {
         });
 
       if (!isAddressEq(sender, L2_BASE_TOKEN_ADDRESS)) {
-        throw new Error(`[${FLOW_NAME}] Withdrawal ${withdrawalHash} is not a base token withdrawal`);
+        throw new Error(`Withdrawal ${withdrawalHash} is not a base token withdrawal`);
       }
-
       // Determine the correct L1 bridge
 
       const bridges = await this.wallet.getL1BridgeContracts();
@@ -93,19 +88,19 @@ export class WithdrawalFinalizeFlow extends WithdrawalBaseFlow {
         throw new Error("V26 bridges are not supported");
       }
 
-      winston.info(`[${FLOW_NAME}] Finalization simulation for withdrawal ${withdrawalHash} successful`);
+      this.logger.info(`Finalization simulation for withdrawal ${withdrawalHash} successful`);
 
       this.metricRecorder.recordFlowSuccess();
       return Status.OK;
     } catch (e) {
-      winston.error(`[${FLOW_NAME}] Error during flow execution: ${unwrap(e)}`);
+      this.logger.error(`Error during flow execution: ${unwrap(e)}`);
       this.metricRecorder.recordFlowFailure();
       return Status.FAIL;
     }
   }
 
   public async run() {
-    winston.info(`[${FLOW_NAME}] Starting withdrawal finalize flow with interval ${this.intervalMs / MIN} minutes`);
+    this.logger.info(`Starting withdrawal finalize flow with interval ${this.intervalMs / MIN} minutes`);
     if (!PRE_V26_BRIDGES) {
       throw new Error("V26 bridges are not supported");
     }

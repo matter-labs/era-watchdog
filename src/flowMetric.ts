@@ -1,7 +1,8 @@
 import { Gauge } from "prom-client";
-import winston from "winston";
 
 import { withTimeout } from "./utils";
+
+import type { Logger } from "winston";
 
 export const StatusNoSkip = {
   OK: "OK",
@@ -67,11 +68,14 @@ export class FlowMetricRecorder {
   startTime: number | null = null;
   private _lastStepLatency: number | null = null;
   private _lastExecutionTotalLatency: number | null = null;
-  constructor(private flowName: string) {}
+  constructor(
+    private flowName: string,
+    private logger: Logger
+  ) {}
 
   public recordFlowStart() {
     this.startTime = Date.now();
-    winston.info(`[${this.flowName}] Flow started`);
+    this.logger.info("Flow started");
   }
 
   public async stepExecution<T>({
@@ -105,7 +109,7 @@ export class FlowMetricRecorder {
     store.metric_latency.set({ flow: this.flowName, stage: stepName }, latency);
     this._lastStepLatency = latency;
     store.metric_step_timestamp.set({ flow: this.flowName, step: stepName }, end);
-    winston.info(`[${this.flowName}] Step ${stepName} took ${latency} seconds`);
+    this.logger.info(`Step ${stepName} took ${latency} seconds`);
     return ret;
   }
 
@@ -117,7 +121,7 @@ export class FlowMetricRecorder {
       store.metric_status.set({ flow: this.flowName }, 1);
       this._lastExecutionTotalLatency = latency;
       this.startTime = null;
-      winston.info(`[${this.flowName}] Flow completed in ${latency} seconds`);
+      this.logger.info(`Flow completed in ${latency} seconds`);
     } else {
       throw new Error("Flow start was not recorded");
     }
@@ -129,7 +133,7 @@ export class FlowMetricRecorder {
       const latency = (endTime - this.startTime) / 1000; // in seconds
       store.metric_status.set({ flow: this.flowName }, 0.5);
       this.startTime = null;
-      winston.info(`[${this.flowName}] Flow skipped after ${latency} seconds`);
+      this.logger.info(`Flow skipped after ${latency} seconds`);
     } else {
       throw new Error("Flow start was not recorded");
     }
@@ -138,7 +142,7 @@ export class FlowMetricRecorder {
   public recordFlowFailure() {
     store.metric_status.set({ flow: this.flowName }, 0);
     this.startTime = null;
-    winston.error(`[${this.flowName}] Flow failed`);
+    this.logger.error("Flow failed");
   }
 
   /// MANUAL FUNCTIONS
@@ -155,7 +159,7 @@ export class FlowMetricRecorder {
     store.metric_latency.set({ flow: this.flowName, stage: stepName }, latencySec);
     this._lastStepLatency = latencySec;
     store.metric_step_timestamp.set({ flow: this.flowName, step: stepName }, stepEndSec * 1000);
-    winston.info(`[${this.flowName}] Step ${stepName} took ${latencySec} seconds`);
+    this.logger.info(`Step ${stepName} took ${latencySec} seconds`);
   }
 
   public manualRecordStepGas(stepName: string, gas: Numberish) {

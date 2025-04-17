@@ -3,6 +3,7 @@ import { utils } from "zksync-ethers";
 import { IEthToken__factory as IETHTokenFactory } from "zksync-ethers/build/typechain";
 import { L2_BASE_TOKEN_ADDRESS } from "zksync-ethers/build/utils";
 
+import { BaseFlow } from "./baseFlow";
 import { SEC, unwrap } from "./utils";
 
 import type { BigNumberish, ethers, TransactionReceipt } from "ethers";
@@ -37,12 +38,14 @@ export const STEPS = {
 export const WITHDRAWAL_RETRY_INTERVAL = +(process.env.FLOW_WITHDRAWAL_RETRY_INTERVAL ?? 30 * SEC);
 export const WITHDRAWAL_RETRY_LIMIT = +(process.env.FLOW_WITHDRAWAL_RETRY_LIMIT ?? 10);
 
-export abstract class WithdrawalBaseFlow {
+export abstract class WithdrawalBaseFlow extends BaseFlow {
   constructor(
     protected wallet: Wallet,
     protected paymasterAddress: string | undefined,
-    private flowName: string
-  ) {}
+    flowName: string
+  ) {
+    super(flowName);
+  }
 
   protected getWithdrawalRequest(): WithdrawalTxRequest {
     const request: WithdrawalTxRequest = {
