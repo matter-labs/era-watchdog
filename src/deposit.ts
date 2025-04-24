@@ -1,7 +1,6 @@
 import "dotenv/config";
 
 import { formatEther, MaxInt256, parseEther, toBigInt } from "ethers";
-import winston from "winston";
 import { utils } from "zksync-ethers";
 import { ETH_ADDRESS_IN_CONTRACTS } from "zksync-ethers/build/utils";
 
@@ -13,7 +12,7 @@ import {
   PRIORITY_OP_TIMEOUT,
   STEPS,
 } from "./depositBase";
-import { FlowMetricRecorder, Status } from "./flowMetric";
+import { Status } from "./flowMetric";
 import { SEC, MIN, unwrap, timeoutPromise } from "./utils";
 
 import type { BigNumberish, BytesLike, Overrides } from "ethers";
@@ -36,8 +35,6 @@ type L2Request = {
 };
 
 export class DepositFlow extends DepositBaseFlow {
-  private metricRecorder: FlowMetricRecorder;
-
   constructor(
     wallet: Wallet,
     l1BridgeContracts: {
@@ -50,7 +47,6 @@ export class DepositFlow extends DepositBaseFlow {
     private intervalMs: number
   ) {
     super(wallet, l1BridgeContracts, chainId, baseToken, FLOW_NAME);
-    this.metricRecorder = new FlowMetricRecorder(FLOW_NAME);
   }
 
   protected async executeWatchdogDeposit(): Promise<Status> {
@@ -61,13 +57,13 @@ export class DepositFlow extends DepositBaseFlow {
 
         // heuristic condition to determine if we should perform the infinite approval
         if (allowance < parseEther("100000")) {
-          winston.info(`[deposit] Approving base token ${this.baseToken} for infinite amount`);
+          this.logger.info(`Approving base token ${this.baseToken} for infinite amount`);
           await this.wallet.approveERC20(this.baseToken, MaxInt256);
         } else {
-          winston.info(`[deposit] Base token ${this.baseToken} already has approval`);
+          this.logger.info(`Base token ${this.baseToken} already has approval`);
         }
         const balance = await this.wallet.getBalanceL1(this.baseToken);
-        winston.info(`[deposit] Base token ${this.baseToken} balance: ${formatEther(balance.toString())}`);
+        this.logger.info(`Base token ${this.baseToken} balance: ${formatEther(balance.toString())}`);
       }
 
       this.metricRecorder.recordFlowStart();
@@ -101,8 +97,8 @@ export class DepositFlow extends DepositBaseFlow {
         BigInt(unwrap(populatedWithOverrides.mintValue)) - BigInt(unwrap(populatedWithOverrides.l2Value))
       );
       if (populatedWithOverrides.overrides.maxFeePerGas > DEPOSIT_L1_GAS_PRICE_LIMIT_GWEI) {
-        winston.warn(
-          `[deposit] Gas price ${populatedWithOverrides.overrides.maxFeePerGas} is higher than limit ${DEPOSIT_L1_GAS_PRICE_LIMIT_GWEI}. Skipping deposit`
+        this.logger.warn(
+          `Gas price ${populatedWithOverrides.overrides.maxFeePerGas} is higher than limit ${DEPOSIT_L1_GAS_PRICE_LIMIT_GWEI}. Skipping deposit`
         );
         this.metricRecorder.recordFlowSkipped();
         return Status.SKIP;
@@ -114,7 +110,7 @@ export class DepositFlow extends DepositBaseFlow {
         stepTimeoutMs: 30 * SEC,
         fn: () => this.wallet.requestExecute(populatedWithOverrides),
       });
-      winston.info(`[deposit] Tx (L1: ${depositHandle.hash}) sent on L1`);
+      this.logger.info(`Tx (L1: ${depositHandle.hash}) sent on L1`);
 
       // wait for transaction
       const txReceipt = await this.metricRecorder.stepExecution({
@@ -134,7 +130,7 @@ export class DepositFlow extends DepositBaseFlow {
         await this.wallet._providerL2().getMainContractAddress()
       );
       const txHashs = `(L1: ${depositHandle.hash}, L2: ${l2TxHash})`;
-      winston.info(`[deposit] Tx ${txHashs} mined on l1`);
+      this.logger.info(`Tx ${txHashs} mined on l1`);
       // wait for deposit to be finalized
       await this.metricRecorder.stepExecution({
         stepName: STEPS.l2_execution,
@@ -146,13 +142,13 @@ export class DepositFlow extends DepositBaseFlow {
           recordStepGasCost(unwrap(receipt.gasUsed) * unwrap(receipt.gasPrice));
         },
       });
-      winston.info(`[deposit] Tx ${txHashs} mined on L2`);
+      this.logger.info(`Tx ${txHashs} mined on L2`);
 
       this.metricRecorder.recordFlowSuccess();
       return Status.OK;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
-      winston.error("deposit tx error: " + error?.message, error?.stack);
+      this.logger.error("deposit tx error: " + error?.message, error?.stack);
       this.metricRecorder.recordFlowFailure();
       return Status.FAIL;
     }
@@ -165,7 +161,7 @@ export class DepositFlow extends DepositBaseFlow {
     if (lastExecution.status != null) this.metricRecorder.recordPreviousExecutionStatus(lastExecution.status!);
     if (timeSinceLastDepositSec < this.intervalMs / SEC) {
       const waitTime = this.intervalMs - timeSinceLastDepositSec * SEC;
-      winston.info(`Waiting ${(waitTime / 1000).toFixed(0)} seconds before starting deposit flow`);
+      this.logger.info(`Waiting ${(waitTime / 1000).toFixed(0)} seconds before starting deposit flow`);
       await timeoutPromise(waitTime);
     }
     while (true) {
@@ -175,14 +171,14 @@ export class DepositFlow extends DepositBaseFlow {
         const result = await this.executeWatchdogDeposit();
         switch (result) {
           case Status.OK:
-            winston.info(`[deposit] attempt ${attempt} succeeded`);
+            this.logger.info(`attempt ${attempt} succeeded`);
             break;
           case Status.SKIP:
-            winston.info(`[deposit] attempt ${attempt} skipped (not counted towards limit)`);
+            this.logger.info(`attempt ${attempt} skipped (not counted towards limit)`);
             break;
           case Status.FAIL: {
             attempt++;
-            winston.warn(
+            this.logger.warn(
               `[deposit] attempt ${attempt} of ${DEPOSIT_RETRY_LIMIT} failed` +
                 (attempt != DEPOSIT_RETRY_LIMIT
                   ? `, retrying in ${(DEPOSIT_RETRY_INTERVAL / 1000).toFixed(0)} seconds`

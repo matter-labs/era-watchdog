@@ -1,20 +1,19 @@
 import "dotenv/config";
-import winston from "winston";
 import { utils } from "zksync-ethers";
 
+import { BaseFlow } from "./baseFlow";
 import { L2_EXECUTION_TIMEOUT } from "./configs";
-import { FlowMetricRecorder, StatusNoSkip } from "./flowMetric";
+import { StatusNoSkip } from "./flowMetric";
 import { SEC, timeoutPromise, unwrap } from "./utils";
 
 import type { Mutex } from "./lock";
 import type { types, Provider, Wallet } from "zksync-ethers";
 
+const FLOW_NAME = "transfer";
 const FLOW_RETRY_LIMIT = +(process.env.FLOW_RETRY_LIMIT ?? 5);
 const FLOW_RETRY_INTERVAL = +(process.env.FLOW_RETRY_INTERVAL ?? 5 * SEC);
 
-export class SimpleTxFlow {
-  private metricRecorder: FlowMetricRecorder;
-
+export class SimpleTxFlow extends BaseFlow {
   constructor(
     private provider: Provider,
     private wallet: Wallet,
@@ -22,7 +21,7 @@ export class SimpleTxFlow {
     private paymasterAddress: string | undefined,
     private intervalMs: number
   ) {
-    this.metricRecorder = new FlowMetricRecorder("transfer");
+    super(FLOW_NAME);
   }
 
   protected getTxRequest(): types.TransactionRequest {
@@ -93,7 +92,7 @@ export class SimpleTxFlow {
       return StatusNoSkip.OK;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
-      winston.error("simple tx error: " + error?.message, error?.stack);
+      this.logger.error("simple tx error: " + error?.message, error?.stack);
       this.metricRecorder.recordFlowFailure();
       return StatusNoSkip.FAIL;
     }
@@ -105,10 +104,10 @@ export class SimpleTxFlow {
       for (let i = 0; i < FLOW_RETRY_LIMIT; i++) {
         const result = await this.l2WalletLock.withLock(() => this.step());
         if (result === StatusNoSkip.OK) {
-          winston.info(`[transfer] attempt ${i + 1} succeeded`);
+          this.logger.info(`attempt ${i + 1} succeeded`);
           break;
         } else {
-          winston.error(`[transfer] attempt ${i + 1} failed`);
+          this.logger.error(`attempt ${i + 1} failed`);
         }
         await timeoutPromise(FLOW_RETRY_INTERVAL);
       }

@@ -1,8 +1,8 @@
 import "dotenv/config";
 import { id } from "ethers";
-import winston from "winston";
 import { utils } from "zksync-ethers";
 
+import { BaseFlow } from "./baseFlow";
 import { StatusNoSkip } from "./flowMetric";
 import { MIN, SEC, unwrap } from "./utils";
 
@@ -55,7 +55,7 @@ const GWEI = 1000n * 1000n * 1000n;
 export const DEPOSIT_L1_GAS_PRICE_LIMIT_GWEI =
   BigInt(+(process.env.FLOW_DEPOSIT_L1_GAS_PRICE_LIMIT_GWEI ?? 1000)) * GWEI;
 
-export abstract class DepositBaseFlow {
+export abstract class DepositBaseFlow extends BaseFlow {
   constructor(
     protected wallet: Wallet,
     protected l1BridgeContracts: {
@@ -65,8 +65,10 @@ export abstract class DepositBaseFlow {
     },
     protected chainId: bigint,
     protected baseToken: string,
-    private flowName: string
-  ) {}
+    flowName: string
+  ) {
+    super(flowName);
+  }
 
   protected getDepositRequest(): DepositTxRequest {
     return {
@@ -97,7 +99,7 @@ export abstract class DepositBaseFlow {
     });
     events.sort((a, b) => b.blockNumber - a.blockNumber);
     if (events.length === 0) {
-      winston.info(`[${this.flowName}] No deposits found for ${wallet ?? "any wallet"}`);
+      this.logger.info(`No deposits found for ${wallet ?? "any wallet"}`);
       return {
         timestampL1: 0,
         status: null,
@@ -109,17 +111,15 @@ export abstract class DepositBaseFlow {
     const l1Receipt = await event.getTransactionReceipt();
     const l2TxHash = utils.getL2HashFromPriorityOp(l1Receipt, await this.wallet._providerL2().getMainContractAddress());
     const secSinceL1Deposit = blockchainTime - timestampL1;
-    winston.info(
-      `[${this.flowName}] Found deposit ${event.transactionHash} at ${new Date(timestampL1 * 1000).toUTCString()}, ${secSinceL1Deposit} seconds ago, expecting L2 TX hash ${l2TxHash}`
+    this.logger.info(
+      `Found deposit ${event.transactionHash} at ${new Date(timestampL1 * 1000).toUTCString()}, ${secSinceL1Deposit} seconds ago, expecting L2 TX hash ${l2TxHash}`
     );
     let l2Receipt: TransactionReceipt | null = null;
     try {
       l2Receipt = await this.wallet._providerL2().waitForTransaction(l2TxHash, 1, PRIORITY_OP_TIMEOUT);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (e: any) {
-      winston.error(
-        `[${this.flowName}] ${event.transactionHash} error (${e?.message}) fetching l2 transaction: ${l2TxHash} `
-      );
+      this.logger.error(`${event.transactionHash} error (${e?.message}) fetching l2 transaction: ${l2TxHash} `);
     }
 
     const l1Res = {
@@ -128,21 +128,21 @@ export abstract class DepositBaseFlow {
       timestampL1,
     };
     if (l2Receipt == null) {
-      winston.error(`[${this.flowName}] ${event.transactionHash} not executed on l2: ${l2TxHash} `);
+      this.logger.error(`${event.transactionHash} not executed on l2: ${l2TxHash} `);
       return {
         ...l1Res,
         status: StatusNoSkip.FAIL,
       };
     } else if (l2Receipt.status != 1) {
-      winston.error(`[${this.flowName}] ${event.transactionHash} failed on l2: ${l2TxHash} `);
+      this.logger.error(`${event.transactionHash} failed on l2: ${l2TxHash} `);
       return {
         ...l1Res,
         status: StatusNoSkip.FAIL,
       };
     } else {
       const timestampL2 = (await l2Receipt.getBlock()).timestamp;
-      winston.info(
-        `[${this.flowName}] ${event.transactionHash} executed successfully on l2: ${l2TxHash} at ${new Date(timestampL2 * 1000).toUTCString()} `
+      this.logger.info(
+        `${event.transactionHash} executed successfully on l2: ${l2TxHash} at ${new Date(timestampL2 * 1000).toUTCString()} `
       );
       return {
         ...l1Res,
