@@ -10,8 +10,8 @@ import type { Mutex } from "./lock";
 import type { types, Provider, Wallet } from "zksync-ethers";
 
 const FLOW_NAME = "transfer";
-const FLOW_RETRY_LIMIT = +(process.env.FLOW_RETRY_LIMIT ?? 5);
-const FLOW_RETRY_INTERVAL = +(process.env.FLOW_RETRY_INTERVAL ?? 5 * SEC);
+const TRANSFER_RETRY_LIMIT = +(process.env.FLOW_TRANSFER_RETRY_LIMIT ?? 5);
+const TRANSFER_RETRY_INTERVAL = +(process.env.FLOW_TRANSFER_RETRY_INTERVAL ?? 5 * SEC);
 
 export class SimpleTxFlow extends BaseFlow {
   constructor(
@@ -101,7 +101,7 @@ export class SimpleTxFlow extends BaseFlow {
   public async run() {
     while (true) {
       const nextExecutionWait = timeoutPromise(this.intervalMs);
-      for (let i = 0; i < FLOW_RETRY_LIMIT; i++) {
+      for (let i = 0; i < TRANSFER_RETRY_LIMIT; i++) {
         const result = await this.l2WalletLock.withLock(() => this.step());
         if (result === StatusNoSkip.OK) {
           this.logger.info(`attempt ${i + 1} succeeded`);
@@ -109,7 +109,7 @@ export class SimpleTxFlow extends BaseFlow {
         } else {
           this.logger.error(`attempt ${i + 1} failed`);
         }
-        await timeoutPromise(FLOW_RETRY_INTERVAL);
+        await timeoutPromise(TRANSFER_RETRY_INTERVAL);
       }
       //sleep
       await nextExecutionWait;
