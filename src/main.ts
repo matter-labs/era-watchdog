@@ -3,7 +3,9 @@ import { ethers } from "ethers";
 import express from "express";
 import { collectDefaultMetrics, register } from "prom-client";
 import winston from "winston";
-import { Provider, Wallet } from "zksync-ethers";
+import { Wallet } from "zksync-ethers";
+
+import { LoggingZkSyncProvider } from "./loggingProvider";
 
 import { DepositFlow } from "./deposit";
 import { DepositUserFlow } from "./depositUsers";
@@ -16,7 +18,7 @@ import { WithdrawalFinalizeFlow } from "./withdrawalFinalize";
 
 const main = async () => {
   setupLogger(process.env.NODE_ENV, process.env.LOG_LEVEL);
-  const l2Provider = new Provider(unwrap(process.env.CHAIN_RPC_URL));
+  const l2Provider = new LoggingZkSyncProvider(unwrap(process.env.CHAIN_RPC_URL));
   const wallet = new Wallet(unwrap(process.env.WALLET_KEY), l2Provider);
   const paymasterAddress = process.env.PAYMASTER_ADDRESS;
   const l2WalletLock = new Mutex();
@@ -37,7 +39,7 @@ const main = async () => {
   }
 
   if (process.env.FLOW_DEPOSIT_ENABLE === "1" || process.env.FLOW_DEPOSIT_USER_ENABLE === "1") {
-    const l1Provider = new Provider(unwrap(process.env.CHAIN_L1_RPC_URL));
+    const l1Provider = new LoggingZkSyncProvider(unwrap(process.env.CHAIN_L1_RPC_URL));
     const walletDeposit = new Wallet(unwrap(process.env.WALLET_KEY), l2Provider, l1Provider);
     const l1BridgeContracts = await walletDeposit.getL1BridgeContracts();
     const chainId = (await walletDeposit.provider.getNetwork()).chainId;
@@ -74,7 +76,7 @@ const main = async () => {
   if (process.env.FLOW_WITHDRAWAL_FINALIZE_ENABLE === "1") {
     // We need a wallet with both L2 and L1 providers for withdrawal finalization
     // Create a new wallet with L1 provider
-    const l1ProviderForWithdrawal = new Provider(unwrap(process.env.CHAIN_L1_RPC_URL));
+    const l1ProviderForWithdrawal = new LoggingZkSyncProvider(unwrap(process.env.CHAIN_L1_RPC_URL));
     const walletForWithdrawals = new Wallet(unwrap(process.env.WALLET_KEY), l2Provider, l1ProviderForWithdrawal);
 
     new WithdrawalFinalizeFlow(walletForWithdrawals, +unwrap(process.env.FLOW_WITHDRAWAL_FINALIZE_INTERVAL)).run();
