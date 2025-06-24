@@ -5,12 +5,11 @@ import { collectDefaultMetrics, register } from "prom-client";
 import winston from "winston";
 import { Wallet } from "zksync-ethers";
 
-import { LoggingZkSyncProvider } from "./loggingProvider";
-
 import { DepositFlow } from "./deposit";
 import { DepositUserFlow } from "./depositUsers";
 import { Mutex } from "./lock";
 import { setupLogger } from "./logger";
+import { LoggingZkSyncProvider } from "./rpcLoggingProvider";
 import { SimpleTxFlow } from "./transfer";
 import { unwrap } from "./utils";
 import { WithdrawalFlow } from "./withdrawal";
