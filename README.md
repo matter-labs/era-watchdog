@@ -66,6 +66,7 @@ All configuration is handled via environment variables (see `.env` for examples)
 - `PAYMASTER_ADDRESS`: (optional) Use paymaster for L2 transactions
 - `METRICS_PORT`: Prometheus metrics port (default: `8080`)
 - `CHAIN_L1_RPC_URL`: L1 JSON-RPC endpoint
+- `L2_EXECUTION_TIMEOUT`: L2 transaction inclusion timeout in ms (default: 15 seconds)
 
 ### Flow-specific options
 See below for detailed flow configuration.
@@ -87,6 +88,8 @@ Options:
 - `FLOW_TRANSFER_ENABLE` -- set to `1` to enable
 - `FLOW_TRANSFER_INTERVAL` -- interval in ms
 - `FLOW_TRANSFER_EXECUTION_TIMEOUT` -- timeout of l2 transfer confirmation in ms
+- `FLOW_TRANSFER_RETRY_LIMIT` -- retry limit (default to 5)
+- `FLOW_TRANSFER_RETRY_INTERVAL` -- retry interval in ms (default to 5 seconds)
 
 ### Deposit
 
