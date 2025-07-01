@@ -80,7 +80,7 @@ export class SimpleTxFlow extends BaseFlow {
         stepName: "execution",
         stepTimeoutMs: L2_EXECUTION_TIMEOUT,
         fn: async ({ recordStepGas, recordStepGasPrice, recordStepGasCost }) => {
-          const receipt = await txResponse.wait(1);
+          const receipt = await txResponse.wait();
           recordStepGas(unwrap(receipt.gasUsed));
           recordStepGasPrice(unwrap(receipt.gasPrice));
           recordStepGasCost(BigInt(unwrap(receipt.gasUsed)) * BigInt(unwrap(receipt.gasPrice)));

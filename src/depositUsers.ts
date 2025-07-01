@@ -106,7 +106,7 @@ export class DepositUserFlow extends DepositBaseFlow {
         await this.wallet._providerL2().getMainContractAddress()
       );
       this.logger.info(`Deposit transaction mined on L1, expecting L2 hash: ${l2TxHash}`);
-      await depositHandle.wait(1);
+      await depositHandle.wait();
       this.logger.info("Deposit transaction mined on L2. Checking status...");
       const watchdogTxResult = await this.getLastExecution(this.wallet.address);
       if (watchdogTxResult.status == null) {
