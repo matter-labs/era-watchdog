@@ -3,7 +3,7 @@ import { ethers } from "ethers";
 import express from "express";
 import { collectDefaultMetrics, register } from "prom-client";
 import winston from "winston";
-import { Wallet } from "zksync-ethers";
+import { Provider, Wallet } from "zksync-ethers";
 
 import { DepositFlow } from "./deposit";
 import { DepositUserFlow } from "./depositUsers";
@@ -38,7 +38,7 @@ const main = async () => {
   }
 
   if (process.env.FLOW_DEPOSIT_ENABLE === "1" || process.env.FLOW_DEPOSIT_USER_ENABLE === "1") {
-    const l1Provider = new LoggingZkSyncProvider(unwrap(process.env.CHAIN_L1_RPC_URL));
+    const l1Provider = new Provider(unwrap(process.env.CHAIN_L1_RPC_URL));
     const walletDeposit = new Wallet(unwrap(process.env.WALLET_KEY), l2Provider, l1Provider);
     const l1BridgeContracts = await walletDeposit.getL1BridgeContracts();
     const chainId = (await walletDeposit.provider.getNetwork()).chainId;
