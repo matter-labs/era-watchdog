@@ -35,6 +35,7 @@ export class LoggingZkSyncProvider extends ZkSyncProvider {
       winston.debug(`[JSON-RPC Response] ID: ${id} Method: ${method} Duration: ${duration}ms`, {
         rpcResponse: {
           id,
+          method,
           result: JSON.stringify(result, (_, value) => (typeof value === "bigint" ? value.toString() : value)),
         },
       });
@@ -47,6 +48,7 @@ export class LoggingZkSyncProvider extends ZkSyncProvider {
       winston.error(`[JSON-RPC Error] ID: ${id} Method: ${method} Duration: ${duration}ms Error: ${error.message}`, {
         rpcError: {
           id,
+          method,
           error: error.message,
           code: error.code,
           data: error.data,
