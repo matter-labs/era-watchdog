@@ -7,7 +7,8 @@ import { StatusNoSkip } from "./flowMetric";
 import { SEC, timeoutPromise, unwrap } from "./utils";
 
 import type { Mutex } from "./lock";
-import type { types, Provider, Wallet } from "zksync-ethers";
+import type { Wallet as EthersWallet } from "ethers";
+import type { types, Provider, Wallet as ZkSyncWallet } from "zksync-ethers";
 
 const FLOW_NAME = "transfer";
 const TRANSFER_RETRY_LIMIT = +(process.env.FLOW_TRANSFER_RETRY_LIMIT ?? 5);
@@ -16,7 +17,7 @@ const TRANSFER_RETRY_INTERVAL = +(process.env.FLOW_TRANSFER_RETRY_INTERVAL ?? 5 
 export class SimpleTxFlow extends BaseFlow {
   constructor(
     private provider: Provider,
-    private wallet: Wallet,
+    private wallet: ZkSyncWallet | EthersWallet,
     private l2WalletLock: Mutex,
     private paymasterAddress: string | undefined,
     private intervalMs: number
@@ -80,7 +81,7 @@ export class SimpleTxFlow extends BaseFlow {
         stepName: "execution",
         stepTimeoutMs: L2_EXECUTION_TIMEOUT,
         fn: async ({ recordStepGas, recordStepGasPrice, recordStepGasCost }) => {
-          const receipt = await txResponse.wait(1);
+          const receipt = unwrap(await txResponse.wait(1));
           recordStepGas(unwrap(receipt.gasUsed));
           recordStepGasPrice(unwrap(receipt.gasPrice));
           recordStepGasCost(BigInt(unwrap(receipt.gasUsed)) * BigInt(unwrap(receipt.gasPrice)));
