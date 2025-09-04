@@ -91,7 +91,11 @@ const main = async () => {
       // We need a wallet with both L2 and L1 providers for withdrawal finalization
       // Create a new wallet with L1 provider
       const l1ProviderForWithdrawal = new LoggingZkSyncProvider(unwrap(process.env.CHAIN_L1_RPC_URL));
-      const walletForWithdrawals = new ZkSyncWallet(unwrap(process.env.WALLET_KEY), l2Provider, l1ProviderForWithdrawal);
+      const walletForWithdrawals = new ZkSyncWallet(
+        unwrap(process.env.WALLET_KEY),
+        l2Provider,
+        l1ProviderForWithdrawal
+      );
 
       new WithdrawalFinalizeFlow(walletForWithdrawals, +unwrap(process.env.FLOW_WITHDRAWAL_FINALIZE_INTERVAL)).run();
       enabledFlows++;
