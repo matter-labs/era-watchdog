@@ -1,4 +1,4 @@
-import { Gauge } from "prom-client";
+import { Gauge, Histogram } from "prom-client";
 
 import { withTimeout } from "./utils";
 
@@ -22,6 +22,7 @@ class FlowMetricStore {
   public metric_step_timestamp: Gauge; //in ms
   public metric_latency_total: Gauge;
   public metric_status: Gauge;
+  public metric_status_hist: Histogram;
   public metric_step_gas: Gauge;
   public metric_step_gas_price: Gauge;
   public metric_step_gas_cost: Gauge;
@@ -38,6 +39,11 @@ class FlowMetricStore {
       labelNames: ["flow"],
     });
     this.metric_status = new Gauge({ name: "watchdog_status", help: "Watchdog flow status", labelNames: ["flow"] });
+    this.metric_status_hist = new Histogram({
+      name: "watchdog_status_hist",
+      help: "Watchdog flow status histogram",
+      labelNames: ["flow"],
+    });
     this.metric_step_timestamp = new Gauge({
       name: "watchdog_step_timestamp",
       help: "Watchdog last step completion timestamp in ms for all flows",
@@ -119,6 +125,7 @@ export class FlowMetricRecorder {
       const latency = (endTime - this.startTime) / 1000; // in seconds
       store.metric_latency_total.set({ flow: this.flowName }, latency);
       store.metric_status.set({ flow: this.flowName }, 1);
+      store.metric_status_hist.observe({ flow: this.flowName }, 1);
       this._lastExecutionTotalLatency = latency;
       this.startTime = null;
       this.logger.info(`Flow completed in ${latency} seconds`);
@@ -141,6 +148,7 @@ export class FlowMetricRecorder {
 
   public recordFlowFailure() {
     store.metric_status.set({ flow: this.flowName }, 0);
+    store.metric_status_hist.observe({ flow: this.flowName }, 0);
     this.startTime = null;
     this.logger.error("Flow failed");
   }
@@ -149,6 +157,7 @@ export class FlowMetricRecorder {
   /// Needed for recording based solly on onchain data
   public manualRecordStatus(status: Status, latencyTotalSec: number) {
     store.metric_status.set({ flow: this.flowName }, status === Status.OK ? 1 : 0);
+    store.metric_status_hist.observe({ flow: this.flowName }, status === Status.OK ? 1 : 0);
     if (status === Status.OK) {
       store.metric_latency_total.set({ flow: this.flowName }, latencyTotalSec);
       this._lastExecutionTotalLatency = latencyTotalSec;
@@ -178,10 +187,11 @@ export class FlowMetricRecorder {
     switch (status) {
       case Status.OK: {
         store.metric_status.set({ flow: this.flowName }, 1);
+        store.metric_status_hist.observe({ flow: this.flowName }, 1);
         break;
       }
       case Status.FAIL: {
-        store.metric_status.set({ flow: this.flowName }, 0);
+        store.metric_status_hist.observe({ flow: this.flowName }, 0);
         break;
       }
       default: {

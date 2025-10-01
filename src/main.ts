@@ -7,11 +7,12 @@ import { Provider, Wallet as ZkSyncWallet } from "zksync-ethers";
 
 import { DepositFlow } from "./deposit";
 import { DepositUserFlow } from "./depositUsers";
+import { BlockNumberFlow } from "./getBlockNumber";
 import { Mutex } from "./lock";
 import { setupLogger } from "./logger";
 import { LoggingZkSyncProvider } from "./rpcLoggingProvider";
 import { SimpleTxFlow } from "./transfer";
-import { unwrap } from "./utils";
+import { SEC, unwrap } from "./utils";
 import { WithdrawalFlow } from "./withdrawal";
 import { WithdrawalFinalizeFlow } from "./withdrawalFinalize";
 
@@ -33,6 +34,10 @@ const main = async () => {
       new SimpleTxFlow(l2Provider, wallet, l2WalletLock, void 0, +unwrap(process.env.FLOW_TRANSFER_INTERVAL)).run();
       enabledFlows++;
     }
+
+    // Enable block number flow unconditionally in zkos mode
+    new BlockNumberFlow(l2Provider, SEC).run();
+    enabledFlows++;
   } else {
     const wallet = new ZkSyncWallet(unwrap(process.env.WALLET_KEY), l2Provider);
     const paymasterAddress = process.env.PAYMASTER_ADDRESS;
