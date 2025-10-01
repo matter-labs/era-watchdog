@@ -31,6 +31,7 @@ export class BlockNumberFlow extends BaseFlow {
           },
         });
         this.metricRecorder.recordFlowSuccess();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } catch (error: any) {
         this.logger.error("eth_blockNumber error: " + error?.message, error?.stack);
         this.metricRecorder.recordFlowFailure();

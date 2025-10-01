@@ -39,7 +39,11 @@ class FlowMetricStore {
       labelNames: ["flow"],
     });
     this.metric_status = new Gauge({ name: "watchdog_status", help: "Watchdog flow status", labelNames: ["flow"] });
-    this.metric_status_hist = new Histogram({ name: "watchdog_status_hist", help: "Watchdog flow status histogram", labelNames: ["flow"] });
+    this.metric_status_hist = new Histogram({
+      name: "watchdog_status_hist",
+      help: "Watchdog flow status histogram",
+      labelNames: ["flow"],
+    });
     this.metric_step_timestamp = new Gauge({
       name: "watchdog_step_timestamp",
       help: "Watchdog last step completion timestamp in ms for all flows",

@@ -7,14 +7,14 @@ import { Provider, Wallet as ZkSyncWallet } from "zksync-ethers";
 
 import { DepositFlow } from "./deposit";
 import { DepositUserFlow } from "./depositUsers";
+import { BlockNumberFlow } from "./getBlockNumber";
 import { Mutex } from "./lock";
 import { setupLogger } from "./logger";
 import { LoggingZkSyncProvider } from "./rpcLoggingProvider";
 import { SimpleTxFlow } from "./transfer";
-import {SEC, unwrap} from "./utils";
+import { SEC, unwrap } from "./utils";
 import { WithdrawalFlow } from "./withdrawal";
 import { WithdrawalFinalizeFlow } from "./withdrawalFinalize";
-import {BlockNumberFlow} from "./getBlockNumber";
 
 const main = async () => {
   setupLogger(process.env.NODE_ENV, process.env.LOG_LEVEL);
