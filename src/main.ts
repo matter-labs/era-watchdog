@@ -20,6 +20,9 @@ import { WithdrawalFinalizeFlow } from "./withdrawalFinalize";
 const main = async () => {
   setupLogger(process.env.NODE_ENV, process.env.LOG_LEVEL);
   const l2Provider = new LoggingZkSyncProvider(unwrap(process.env.CHAIN_RPC_URL));
+
+  // For ZKsync OS chains we cannot use `LoggingZkSyncProvider` for getting tx receipt
+  // because format of L2 to L1 logs is different. So we create a separate ethers provider for that.
   const l2EthersProvider = new JsonRpcProvider(unwrap(process.env.CHAIN_RPC_URL));
   l2EthersProvider.pollingInterval = 100;
   const zkos_mode = process.env.ZKOS_MODE === "1";
