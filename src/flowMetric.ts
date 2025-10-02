@@ -191,6 +191,7 @@ export class FlowMetricRecorder {
         break;
       }
       case Status.FAIL: {
+        store.metric_status.set({ flow: this.flowName }, 0);
         store.metric_status_hist.observe({ flow: this.flowName }, 0);
         break;
       }
