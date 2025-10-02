@@ -26,6 +26,7 @@ export class LoggingZkSyncProvider extends ZkSyncProvider {
     this.l1Provider = l1Provider;
   }
 
+  /// method overriden to use L1 calls instead of zks_ method for compatibility with ZKsync OS
   override async getBaseTokenContractAddress(): Promise<string> {
     const bridgehubAddress = await this.getBridgehubContractAddress();
     const bridgehub = IBridgehub__factory.connect(bridgehubAddress, this.l1Provider);

@@ -15,7 +15,7 @@ import {
 import { Status } from "./flowMetric";
 import { SEC, MIN, unwrap, timeoutPromise } from "./utils";
 
-import type { BigNumberish, BytesLike, Overrides, JsonRpcProvider } from "ethers";
+import type { BigNumberish, BytesLike, Overrides, Provider as EthersProvider } from "ethers";
 import type { Wallet } from "zksync-ethers";
 import type { IL1SharedBridge } from "zksync-ethers/build/typechain";
 import type { Address } from "zksync-ethers/build/types";
@@ -41,7 +41,7 @@ export class DepositFlow extends DepositBaseFlow {
     zkChainAddress: string,
     chainId: bigint,
     baseToken: string,
-    l2EthersProvider: JsonRpcProvider,
+    l2EthersProvider: EthersProvider,
     isZKsyncOS: boolean,
     private intervalMs: number
   ) {

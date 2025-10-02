@@ -6,7 +6,7 @@ import { SEC, unwrap, timeoutPromise } from "./utils";
 import { WITHDRAWAL_RETRY_INTERVAL, WITHDRAWAL_RETRY_LIMIT, WithdrawalBaseFlow, STEPS } from "./withdrawalBase";
 
 import type { Mutex } from "./lock";
-import type { BigNumberish, JsonRpcProvider } from "ethers";
+import type { BigNumberish, Provider as EthersProvider } from "ethers";
 import type { Wallet } from "zksync-ethers";
 
 const FLOW_NAME = "withdrawal";
@@ -18,7 +18,7 @@ export class WithdrawalFlow extends WithdrawalBaseFlow {
     isZKsyncOS: boolean,
     private l2WalletLock: Mutex,
     private intervalMs: number,
-    private l2EthersProvider: JsonRpcProvider
+    private l2EthersProvider: EthersProvider
   ) {
     super(wallet, paymasterAddress, isZKsyncOS, FLOW_NAME);
   }

@@ -6,7 +6,7 @@ import { BaseFlow } from "./baseFlow";
 import { StatusNoSkip } from "./flowMetric";
 import { MIN, SEC, unwrap } from "./utils";
 
-import type { BigNumberish, BytesLike, Overrides, TransactionReceipt, JsonRpcProvider } from "ethers";
+import type { BigNumberish, BytesLike, Overrides, TransactionReceipt, Provider as EthersProvider } from "ethers";
 import type { types, Wallet } from "zksync-ethers";
 import type { IL1SharedBridge } from "zksync-ethers/build/typechain";
 
@@ -62,7 +62,7 @@ export abstract class DepositBaseFlow extends BaseFlow {
     protected zkChainAddress: string,
     protected chainId: bigint,
     protected baseToken: string,
-    protected l2EthersProvider: JsonRpcProvider,
+    protected l2EthersProvider: EthersProvider,
     protected isZKsyncOS: boolean,
     flowName: string
   ) {
@@ -70,12 +70,11 @@ export abstract class DepositBaseFlow extends BaseFlow {
   }
 
   protected getDepositRequest(): DepositTxRequest {
-    const request = {
+    const request: DepositTxRequest = {
       to: this.wallet.address,
       token: this.baseToken,
       amount: 1, // just 1 wei
       refundRecipient: this.wallet.address,
-      l2GasLimit: 1_000_000, // TODO
     };
     if (this.isZKsyncOS) {
       request.l2GasLimit = 1_000_000; // to avoid zks_estimateL1ToL1Gas call

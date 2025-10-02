@@ -7,7 +7,7 @@ import { StatusNoSkip } from "./flowMetric";
 import { SEC, timeoutPromise, unwrap } from "./utils";
 
 import type { Mutex } from "./lock";
-import type { JsonRpcProvider, Wallet as EthersWallet } from "ethers";
+import type { Provider as EthersProvider, Wallet as EthersWallet } from "ethers";
 import type { types, Provider, Wallet as ZkSyncWallet } from "zksync-ethers";
 
 const FLOW_NAME = "transfer";
@@ -21,7 +21,7 @@ export class SimpleTxFlow extends BaseFlow {
     private l2WalletLock: Mutex,
     private paymasterAddress: string | undefined,
     private intervalMs: number,
-    private l2EthersProvider: JsonRpcProvider | null = null
+    private l2EthersProvider: EthersProvider | null = null
   ) {
     super(FLOW_NAME);
   }
