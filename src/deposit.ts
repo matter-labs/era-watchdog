@@ -15,9 +15,9 @@ import {
 import { Status } from "./flowMetric";
 import { SEC, MIN, unwrap, timeoutPromise } from "./utils";
 
-import type { BigNumberish, BytesLike, Overrides } from "ethers";
+import type { BigNumberish, BytesLike, Overrides, JsonRpcProvider } from "ethers";
 import type { Wallet } from "zksync-ethers";
-import type { IL1ERC20Bridge, IL1SharedBridge } from "zksync-ethers/build/typechain";
+import type { IL1SharedBridge } from "zksync-ethers/build/typechain";
 import type { Address } from "zksync-ethers/build/types";
 
 const FLOW_NAME = "deposit";
@@ -37,16 +37,15 @@ type L2Request = {
 export class DepositFlow extends DepositBaseFlow {
   constructor(
     wallet: Wallet,
-    l1BridgeContracts: {
-      erc20: IL1ERC20Bridge;
-      weth: IL1ERC20Bridge;
-      shared: IL1SharedBridge;
-    },
+    sharedBridge: IL1SharedBridge,
+    zkChainAddress: string,
     chainId: bigint,
     baseToken: string,
+    l2EthersProvider: JsonRpcProvider,
+    isZKsyncOS: boolean,
     private intervalMs: number
   ) {
-    super(wallet, l1BridgeContracts, chainId, baseToken, FLOW_NAME);
+    super(wallet, sharedBridge, zkChainAddress, chainId, baseToken, l2EthersProvider, isZKsyncOS, FLOW_NAME);
   }
 
   protected async executeWatchdogDeposit(): Promise<Status> {
@@ -125,10 +124,7 @@ export class DepositFlow extends DepositBaseFlow {
         },
       }); // included in a block on L1
 
-      const l2TxHash = utils.getL2HashFromPriorityOp(
-        txReceipt,
-        await this.wallet._providerL2().getMainContractAddress()
-      );
+      const l2TxHash = utils.getL2HashFromPriorityOp(txReceipt, this.zkChainAddress);
       const txHashs = `(L1: ${depositHandle.hash}, L2: ${l2TxHash})`;
       this.logger.info(`Tx ${txHashs} mined on l1`);
       // wait for deposit to be finalized
@@ -136,7 +132,7 @@ export class DepositFlow extends DepositBaseFlow {
         stepName: STEPS.l2_execution,
         stepTimeoutMs: PRIORITY_OP_TIMEOUT,
         fn: async ({ recordStepGasPrice, recordStepGas, recordStepGasCost }) => {
-          const receipt = await depositHandle.wait(1);
+          const receipt = unwrap(await this.l2EthersProvider.waitForTransaction(l2TxHash, 1));
           recordStepGasPrice(unwrap(receipt.gasPrice));
           recordStepGas(unwrap(receipt.gasUsed));
           recordStepGasCost(unwrap(receipt.gasUsed) * unwrap(receipt.gasPrice));

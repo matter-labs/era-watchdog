@@ -13,8 +13,9 @@ import { Status } from "./flowMetric";
 import { SEC, timeoutPromise, unwrap } from "./utils";
 
 import type { ExecutionResultKnown } from "./depositBase";
+import type { JsonRpcProvider } from "ethers";
 import type { Wallet } from "zksync-ethers";
-import type { IL1ERC20Bridge, IL1SharedBridge } from "zksync-ethers/build/typechain";
+import type { IL1SharedBridge } from "zksync-ethers/build/typechain";
 
 const FLOW_NAME = "depositUser";
 export class DepositUserFlow extends DepositBaseFlow {
@@ -23,17 +24,16 @@ export class DepositUserFlow extends DepositBaseFlow {
 
   constructor(
     wallet: Wallet,
-    l1BridgeContracts: {
-      erc20: IL1ERC20Bridge;
-      weth: IL1ERC20Bridge;
-      shared: IL1SharedBridge;
-    },
+    sharedBridge: IL1SharedBridge,
+    zkChainAddress: string,
     chainId: bigint,
     baseToken: string,
+    l2EthersProvider: JsonRpcProvider,
+    isZKsyncOS: boolean,
     private intervalMs: number,
     private txTriggerDelayMs: number
   ) {
-    super(wallet, l1BridgeContracts, chainId, baseToken, FLOW_NAME);
+    super(wallet, sharedBridge, zkChainAddress, chainId, baseToken, l2EthersProvider, isZKsyncOS, FLOW_NAME);
     this.metricTimeSinceLastDeposit = new Gauge({
       name: "watchdog_time_since_last_deposit",
       help: "Blockchain second since last deposit transaction on L1",

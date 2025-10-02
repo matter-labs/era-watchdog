@@ -1,15 +1,30 @@
 import winston from "winston";
 import { Provider as ZkSyncProvider } from "zksync-ethers";
+import { IBridgehub__factory } from "zksync-ethers/build/typechain";
+
+import type { Provider as EthersProvider } from "ethers";
 
 /**
  * Custom Provider wrapper that logs all JSON-RPC calls
  */
 export class LoggingZkSyncProvider extends ZkSyncProvider {
   private requestId: number = 1;
+  private l1Provider: EthersProvider | null = null;
 
   constructor(url: string) {
     // Pass the URL to the parent class constructor
     super(url);
+  }
+
+  setL1Provider(l1Provider: EthersProvider) {
+    this.l1Provider = l1Provider;
+  }
+
+  override async getBaseTokenContractAddress(): Promise<string> {
+    const bridgehubAddress = await this.getBridgehubContractAddress();
+    const bridgehub = IBridgehub__factory.connect(bridgehubAddress, this.l1Provider);
+    const chainId = (await this.getNetwork()).chainId;
+    return await bridgehub.baseToken(chainId);
   }
 
   /**
