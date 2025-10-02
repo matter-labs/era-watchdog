@@ -7,7 +7,7 @@ import { StatusNoSkip } from "./flowMetric";
 import { SEC, timeoutPromise, unwrap } from "./utils";
 
 import type { Mutex } from "./lock";
-import type { Wallet as EthersWallet } from "ethers";
+import type { Provider as EthersProvider, Wallet as EthersWallet } from "ethers";
 import type { types, Provider, Wallet as ZkSyncWallet } from "zksync-ethers";
 
 const FLOW_NAME = "transfer";
@@ -20,7 +20,8 @@ export class SimpleTxFlow extends BaseFlow {
     private wallet: ZkSyncWallet | EthersWallet,
     private l2WalletLock: Mutex,
     private paymasterAddress: string | undefined,
-    private intervalMs: number
+    private intervalMs: number,
+    private l2EthersProvider: EthersProvider | null = null
   ) {
     super(FLOW_NAME);
   }
@@ -81,7 +82,12 @@ export class SimpleTxFlow extends BaseFlow {
         stepName: "execution",
         stepTimeoutMs: L2_EXECUTION_TIMEOUT,
         fn: async ({ recordStepGas, recordStepGasPrice, recordStepGasCost }) => {
-          const receipt = unwrap(await txResponse.wait(1));
+          let receipt;
+          if (this.l2EthersProvider != null) {
+            receipt = unwrap(await this.l2EthersProvider.waitForTransaction(txResponse.hash, 1));
+          } else {
+            receipt = unwrap(await txResponse.wait(1));
+          }
           recordStepGas(unwrap(receipt.gasUsed));
           recordStepGasPrice(unwrap(receipt.gasPrice));
           recordStepGasCost(BigInt(unwrap(receipt.gasUsed)) * BigInt(unwrap(receipt.gasPrice)));

@@ -42,6 +42,7 @@ export abstract class WithdrawalBaseFlow extends BaseFlow {
   constructor(
     protected wallet: Wallet,
     protected paymasterAddress: string | undefined,
+    protected isZKsyncOS: boolean,
     flowName: string
   ) {
     super(flowName);
@@ -53,6 +54,9 @@ export abstract class WithdrawalBaseFlow extends BaseFlow {
       token: L2_BASE_TOKEN_ADDRESS,
       amount: 1, // just 1 wei
     };
+    if (this.isZKsyncOS) {
+      request.overrides = { gasLimit: 1_000_000, type: 2 }; // to avoid zks_estimateFee call
+    }
 
     if (this.paymasterAddress != null) {
       const paymasterParams = utils.getPaymasterParams(this.paymasterAddress, {

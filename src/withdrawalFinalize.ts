@@ -20,9 +20,10 @@ export class WithdrawalFinalizeFlow extends WithdrawalBaseFlow {
 
   constructor(
     wallet: Wallet,
+    isZKsyncOS: boolean,
     private intervalMs: number = FINALIZE_INTERVAL
   ) {
-    super(wallet, undefined, FLOW_NAME);
+    super(wallet, undefined, isZKsyncOS, FLOW_NAME);
     this.metricTimeSinceLastFinalizableWithdrawal = new Gauge({
       name: "watchdog_time_since_last_finalizable_withdrawal",
       help: "Blockchain second since last finalizable withdrawal transaction on L2",

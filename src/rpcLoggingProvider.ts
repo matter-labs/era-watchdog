@@ -1,15 +1,51 @@
 import winston from "winston";
 import { Provider as ZkSyncProvider } from "zksync-ethers";
+import { IBridgehub__factory } from "zksync-ethers/build/typechain";
+
+import type { Provider as EthersProvider } from "ethers";
+import type { Fee, TransactionRequest } from "zksync-ethers/build/types";
 
 /**
  * Custom Provider wrapper that logs all JSON-RPC calls
  */
 export class LoggingZkSyncProvider extends ZkSyncProvider {
   private requestId: number = 1;
+  private l1Provider: EthersProvider | null = null;
+  private isZKsyncOS = false;
 
   constructor(url: string) {
     // Pass the URL to the parent class constructor
     super(url);
+  }
+
+  setIsZKsyncOS(isZKsyncOS: boolean) {
+    this.isZKsyncOS = isZKsyncOS;
+  }
+
+  setL1Provider(l1Provider: EthersProvider) {
+    this.l1Provider = l1Provider;
+  }
+
+  /// method overriden to use L1 calls instead of zks_ method for compatibility with ZKsync OS
+  override async getBaseTokenContractAddress(): Promise<string> {
+    const bridgehubAddress = await this.getBridgehubContractAddress();
+    const bridgehub = IBridgehub__factory.connect(bridgehubAddress, this.l1Provider);
+    const chainId = (await this.getNetwork()).chainId;
+    return await bridgehub.baseToken(chainId);
+  }
+
+  override async estimateFee(transaction: TransactionRequest): Promise<Fee> {
+    if (!this.isZKsyncOS) {
+      return super.estimateFee(transaction);
+    } else {
+      const gasPrice = await this.getGasPrice();
+      return {
+        gasLimit: 0n, // return smth, it shouldn't be used
+        gasPerPubdataLimit: 1n,
+        maxPriorityFeePerGas: 0n,
+        maxFeePerGas: gasPrice * 2n,
+      };
+    }
   }
 
   /**

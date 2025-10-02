@@ -6,9 +6,9 @@ import { BaseFlow } from "./baseFlow";
 import { StatusNoSkip } from "./flowMetric";
 import { MIN, SEC, unwrap } from "./utils";
 
-import type { BigNumberish, BytesLike, Overrides, TransactionReceipt } from "ethers";
+import type { BigNumberish, BytesLike, Overrides, TransactionReceipt, Provider as EthersProvider } from "ethers";
 import type { types, Wallet } from "zksync-ethers";
-import type { IL1ERC20Bridge, IL1SharedBridge } from "zksync-ethers/build/typechain";
+import type { IL1SharedBridge } from "zksync-ethers/build/typechain";
 
 type DepositTxRequest = {
   token: types.Address;
@@ -58,30 +58,33 @@ export const DEPOSIT_L1_GAS_PRICE_LIMIT_GWEI =
 export abstract class DepositBaseFlow extends BaseFlow {
   constructor(
     protected wallet: Wallet,
-    protected l1BridgeContracts: {
-      erc20: IL1ERC20Bridge;
-      weth: IL1ERC20Bridge;
-      shared: IL1SharedBridge;
-    },
+    protected sharedBridge: IL1SharedBridge,
+    protected zkChainAddress: string,
     protected chainId: bigint,
     protected baseToken: string,
+    protected l2EthersProvider: EthersProvider,
+    protected isZKsyncOS: boolean,
     flowName: string
   ) {
     super(flowName);
   }
 
   protected getDepositRequest(): DepositTxRequest {
-    return {
+    const request: DepositTxRequest = {
       to: this.wallet.address,
       token: this.baseToken,
       amount: 1, // just 1 wei
       refundRecipient: this.wallet.address,
     };
+    if (this.isZKsyncOS) {
+      request.l2GasLimit = 1_000_000; // to avoid zks_estimateL1ToL1Gas call
+    }
+    return request;
   }
 
   protected async getLastExecution(wallet: string | undefined): Promise<ExecutionResult> {
     // works only up to v25 due to event signature change
-    const filter = this.l1BridgeContracts.shared.filters.BridgehubDepositBaseTokenInitiated(this.chainId, wallet);
+    const filter = this.sharedBridge.filters.BridgehubDepositBaseTokenInitiated(this.chainId, wallet);
     const topicFilter = await filter.getTopicFilter();
     // also accept the new signature
     topicFilter[0] = [
@@ -92,9 +95,9 @@ export abstract class DepositBaseFlow extends BaseFlow {
     const blockchainTime = await this.getCurrentChainTimestamp();
     // actually filter structure got modified itself so we could use it, but lets not rely on such unexpected behaviour
     const events = await this.wallet._providerL1().getLogs({
-      address: this.l1BridgeContracts.shared.target,
+      address: await this.sharedBridge.getAddress(),
       topics: topicFilter,
-      fromBlock: topBlock - +(process.env.MAX_LOGS_BLOCKS ?? 50 * 1000),
+      fromBlock: Math.max(topBlock - +(process.env.MAX_LOGS_BLOCKS ?? 50 * 1000), 0),
       toBlock: topBlock,
     });
     events.sort((a, b) => b.blockNumber - a.blockNumber);
@@ -109,14 +112,14 @@ export abstract class DepositBaseFlow extends BaseFlow {
 
     const timestampL1 = (await event.getBlock()).timestamp;
     const l1Receipt = await event.getTransactionReceipt();
-    const l2TxHash = utils.getL2HashFromPriorityOp(l1Receipt, await this.wallet._providerL2().getMainContractAddress());
+    const l2TxHash = utils.getL2HashFromPriorityOp(l1Receipt, this.zkChainAddress);
     const secSinceL1Deposit = blockchainTime - timestampL1;
     this.logger.info(
       `Found deposit ${event.transactionHash} at ${new Date(timestampL1 * 1000).toUTCString()}, ${secSinceL1Deposit} seconds ago, expecting L2 TX hash ${l2TxHash}`
     );
     let l2Receipt: TransactionReceipt | null = null;
     try {
-      l2Receipt = await this.wallet._providerL2().waitForTransaction(l2TxHash, 1, PRIORITY_OP_TIMEOUT);
+      l2Receipt = await this.l2EthersProvider.waitForTransaction(l2TxHash, 1, PRIORITY_OP_TIMEOUT);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (e: any) {
       this.logger.error(`${event.transactionHash} error (${e?.message}) fetching l2 transaction: ${l2TxHash} `);

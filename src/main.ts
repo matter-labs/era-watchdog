@@ -1,9 +1,10 @@
 import "dotenv/config";
-import { ethers, Wallet as EthersWallet } from "ethers";
+import { ethers, JsonRpcProvider, Wallet as EthersWallet } from "ethers";
 import express from "express";
 import { collectDefaultMetrics, register } from "prom-client";
 import winston from "winston";
 import { Provider, Wallet as ZkSyncWallet } from "zksync-ethers";
+import { IL1SharedBridge__factory } from "zksync-ethers/build/typechain";
 
 import { DepositFlow } from "./deposit";
 import { DepositUserFlow } from "./depositUsers";
@@ -19,11 +20,17 @@ import { WithdrawalFinalizeFlow } from "./withdrawalFinalize";
 const main = async () => {
   setupLogger(process.env.NODE_ENV, process.env.LOG_LEVEL);
   const l2Provider = new LoggingZkSyncProvider(unwrap(process.env.CHAIN_RPC_URL));
+
+  // For ZKsync OS chains we cannot use `LoggingZkSyncProvider` for getting tx receipt
+  // because format of L2 to L1 logs is different. So we create a separate ethers provider for that.
+  const l2EthersProvider = new JsonRpcProvider(unwrap(process.env.CHAIN_RPC_URL));
+  l2EthersProvider.pollingInterval = 100;
   const zkos_mode = process.env.ZKOS_MODE === "1";
 
   let enabledFlows = 0;
 
   if (zkos_mode) {
+    l2Provider.setIsZKsyncOS(true);
     const wallet = new EthersWallet(unwrap(process.env.WALLET_KEY), l2Provider);
     const l2WalletLock = new Mutex();
 
@@ -31,7 +38,53 @@ const main = async () => {
       `Wallet ${wallet.address} L2 balance is ${ethers.formatEther(await l2Provider.getBalance(wallet.address))}`
     );
     if (process.env.FLOW_TRANSFER_ENABLE === "1") {
-      new SimpleTxFlow(l2Provider, wallet, l2WalletLock, void 0, +unwrap(process.env.FLOW_TRANSFER_INTERVAL)).run();
+      new SimpleTxFlow(
+        l2Provider,
+        wallet,
+        l2WalletLock,
+        void 0,
+        +unwrap(process.env.FLOW_TRANSFER_INTERVAL),
+        l2EthersProvider
+      ).run();
+      enabledFlows++;
+    }
+
+    if (process.env.FLOW_DEPOSIT_ENABLE === "1") {
+      const l1Provider = new Provider(unwrap(process.env.CHAIN_L1_RPC_URL));
+      l2Provider.setL1Provider(l1Provider);
+
+      const walletDeposit = new ZkSyncWallet(unwrap(process.env.WALLET_KEY), l2Provider, l1Provider);
+      const chainId = (await walletDeposit.provider.getNetwork()).chainId;
+      const baseToken = await walletDeposit.getBaseToken();
+
+      const bridgehub = await walletDeposit.getBridgehubContract();
+      const assetRouter = await bridgehub.sharedBridge();
+      const sharedBridge = IL1SharedBridge__factory.connect(assetRouter, walletDeposit._signerL1());
+      const zkChainAddress = await bridgehub.getHyperchain(chainId);
+
+      new DepositFlow(
+        walletDeposit,
+        sharedBridge,
+        zkChainAddress,
+        chainId,
+        baseToken,
+        l2EthersProvider,
+        true,
+        +unwrap(process.env.FLOW_DEPOSIT_INTERVAL)
+      ).run();
+      enabledFlows++;
+    }
+
+    if (process.env.FLOW_WITHDRAWAL_ENABLE === "1") {
+      const wallet = new ZkSyncWallet(unwrap(process.env.WALLET_KEY), l2Provider);
+      new WithdrawalFlow(
+        wallet,
+        void 0,
+        true,
+        l2WalletLock,
+        +unwrap(process.env.FLOW_WITHDRAWAL_INTERVAL),
+        l2EthersProvider
+      ).run();
       enabledFlows++;
     }
 
@@ -63,15 +116,19 @@ const main = async () => {
       const l1BridgeContracts = await walletDeposit.getL1BridgeContracts();
       const chainId = (await walletDeposit.provider.getNetwork()).chainId;
       const baseToken = await walletDeposit.getBaseToken();
+      const zkChainAddress = await walletDeposit._providerL2().getMainContractAddress();
       winston.info(
         `Wallet ${walletDeposit.address} L1 balance is ${ethers.formatEther(await l1Provider.getBalance(walletDeposit.address))}`
       );
       if (process.env.FLOW_DEPOSIT_ENABLE === "1") {
         new DepositFlow(
           walletDeposit,
-          l1BridgeContracts,
+          l1BridgeContracts.shared,
+          zkChainAddress,
           chainId,
           baseToken,
+          l2EthersProvider,
+          false,
           +unwrap(process.env.FLOW_DEPOSIT_INTERVAL)
         ).run();
         enabledFlows++;
@@ -79,9 +136,12 @@ const main = async () => {
       if (process.env.FLOW_DEPOSIT_USER_ENABLE === "1") {
         new DepositUserFlow(
           walletDeposit,
-          l1BridgeContracts,
+          l1BridgeContracts.shared,
+          zkChainAddress,
           chainId,
           baseToken,
+          l2EthersProvider,
+          false,
           +unwrap(process.env.FLOW_DEPOSIT_USER_INTERVAL),
           +unwrap(process.env.FLOW_DEPOSIT_USER_TX_TRIGGER_DELAY)
         ).run();
@@ -89,7 +149,14 @@ const main = async () => {
       }
     }
     if (process.env.FLOW_WITHDRAWAL_ENABLE === "1") {
-      new WithdrawalFlow(wallet, paymasterAddress, l2WalletLock, +unwrap(process.env.FLOW_WITHDRAWAL_INTERVAL)).run();
+      new WithdrawalFlow(
+        wallet,
+        paymasterAddress,
+        false,
+        l2WalletLock,
+        +unwrap(process.env.FLOW_WITHDRAWAL_INTERVAL),
+        l2EthersProvider
+      ).run();
       enabledFlows++;
     }
     if (process.env.FLOW_WITHDRAWAL_FINALIZE_ENABLE === "1") {
@@ -102,7 +169,11 @@ const main = async () => {
         l1ProviderForWithdrawal
       );
 
-      new WithdrawalFinalizeFlow(walletForWithdrawals, +unwrap(process.env.FLOW_WITHDRAWAL_FINALIZE_INTERVAL)).run();
+      new WithdrawalFinalizeFlow(
+        walletForWithdrawals,
+        false,
+        +unwrap(process.env.FLOW_WITHDRAWAL_FINALIZE_INTERVAL)
+      ).run();
       enabledFlows++;
     }
   }
