@@ -35,7 +35,14 @@ const main = async () => {
       `Wallet ${wallet.address} L2 balance is ${ethers.formatEther(await l2Provider.getBalance(wallet.address))}`
     );
     if (process.env.FLOW_TRANSFER_ENABLE === "1") {
-      new SimpleTxFlow(l2Provider, wallet, l2WalletLock, void 0, +unwrap(process.env.FLOW_TRANSFER_INTERVAL)).run();
+      new SimpleTxFlow(
+        l2Provider,
+        wallet,
+        l2WalletLock,
+        void 0,
+        +unwrap(process.env.FLOW_TRANSFER_INTERVAL),
+        l2EthersProvider
+      ).run();
       enabledFlows++;
     }
 
