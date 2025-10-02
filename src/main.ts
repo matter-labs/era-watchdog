@@ -21,11 +21,13 @@ const main = async () => {
   setupLogger(process.env.NODE_ENV, process.env.LOG_LEVEL);
   const l2Provider = new LoggingZkSyncProvider(unwrap(process.env.CHAIN_RPC_URL));
   const l2EthersProvider = new JsonRpcProvider(unwrap(process.env.CHAIN_RPC_URL));
+  l2EthersProvider.pollingInterval = 100;
   const zkos_mode = process.env.ZKOS_MODE === "1";
 
   let enabledFlows = 0;
 
   if (zkos_mode) {
+    l2Provider.setIsZKsyncOS(true);
     const wallet = new EthersWallet(unwrap(process.env.WALLET_KEY), l2Provider);
     const l2WalletLock = new Mutex();
 
@@ -59,6 +61,19 @@ const main = async () => {
         l2EthersProvider,
         true,
         +unwrap(process.env.FLOW_DEPOSIT_INTERVAL)
+      ).run();
+      enabledFlows++;
+    }
+
+    if (process.env.FLOW_WITHDRAWAL_ENABLE === "1") {
+      const wallet = new ZkSyncWallet(unwrap(process.env.WALLET_KEY), l2Provider);
+      new WithdrawalFlow(
+        wallet,
+        void 0,
+        true,
+        l2WalletLock,
+        +unwrap(process.env.FLOW_WITHDRAWAL_INTERVAL),
+        l2EthersProvider
       ).run();
       enabledFlows++;
     }
@@ -124,7 +139,14 @@ const main = async () => {
       }
     }
     if (process.env.FLOW_WITHDRAWAL_ENABLE === "1") {
-      new WithdrawalFlow(wallet, paymasterAddress, l2WalletLock, +unwrap(process.env.FLOW_WITHDRAWAL_INTERVAL)).run();
+      new WithdrawalFlow(
+        wallet,
+        paymasterAddress,
+        false,
+        l2WalletLock,
+        +unwrap(process.env.FLOW_WITHDRAWAL_INTERVAL),
+        l2EthersProvider
+      ).run();
       enabledFlows++;
     }
     if (process.env.FLOW_WITHDRAWAL_FINALIZE_ENABLE === "1") {
@@ -137,7 +159,11 @@ const main = async () => {
         l1ProviderForWithdrawal
       );
 
-      new WithdrawalFinalizeFlow(walletForWithdrawals, +unwrap(process.env.FLOW_WITHDRAWAL_FINALIZE_INTERVAL)).run();
+      new WithdrawalFinalizeFlow(
+        walletForWithdrawals,
+        false,
+        +unwrap(process.env.FLOW_WITHDRAWAL_FINALIZE_INTERVAL)
+      ).run();
       enabledFlows++;
     }
   }

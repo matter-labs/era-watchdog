@@ -6,7 +6,7 @@ import { SEC, unwrap, timeoutPromise } from "./utils";
 import { WITHDRAWAL_RETRY_INTERVAL, WITHDRAWAL_RETRY_LIMIT, WithdrawalBaseFlow, STEPS } from "./withdrawalBase";
 
 import type { Mutex } from "./lock";
-import type { BigNumberish } from "ethers";
+import type { BigNumberish, JsonRpcProvider } from "ethers";
 import type { Wallet } from "zksync-ethers";
 
 const FLOW_NAME = "withdrawal";
@@ -15,10 +15,12 @@ export class WithdrawalFlow extends WithdrawalBaseFlow {
   constructor(
     wallet: Wallet,
     paymasterAddress: string | undefined,
+    isZKsyncOS: boolean,
     private l2WalletLock: Mutex,
-    private intervalMs: number
+    private intervalMs: number,
+    private l2EthersProvider: JsonRpcProvider
   ) {
-    super(wallet, paymasterAddress, FLOW_NAME);
+    super(wallet, paymasterAddress, isZKsyncOS, FLOW_NAME);
   }
 
   protected async executeWatchdogWithdrawal(): Promise<StatusNoSkip> {
@@ -65,7 +67,7 @@ export class WithdrawalFlow extends WithdrawalBaseFlow {
           recordStepGasPrice: (price: BigNumberish) => void;
           recordStepGasCost: (cost: BigNumberish) => void;
         }) => {
-          const receipt = await withdrawalHandle.wait();
+          const receipt = unwrap(await this.l2EthersProvider.waitForTransaction(withdrawalHandle.hash));
           recordStepGas(unwrap(receipt.gasUsed));
           recordStepGasPrice(unwrap(receipt.gasPrice));
           recordStepGasCost(BigInt(unwrap(receipt.gasUsed)) * BigInt(unwrap(receipt.gasPrice)));

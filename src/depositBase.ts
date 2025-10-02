@@ -78,7 +78,7 @@ export abstract class DepositBaseFlow extends BaseFlow {
       l2GasLimit: 1_000_000, // TODO
     };
     if (this.isZKsyncOS) {
-      request.l2GasLimit = 1_000_000; // to avoud zks_estimateL1ToL1Gas call
+      request.l2GasLimit = 1_000_000; // to avoid zks_estimateL1ToL1Gas call
     }
     return request;
   }
