@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { ethers, JsonRpcProvider, Wallet as EthersWallet } from "ethers";
+import { ethers, Wallet as EthersWallet } from "ethers";
 import express from "express";
 import { collectDefaultMetrics, register } from "prom-client";
 import winston from "winston";
@@ -11,7 +11,7 @@ import { DepositUserFlow } from "./depositUsers";
 import { BlockNumberFlow } from "./getBlockNumber";
 import { Mutex } from "./lock";
 import { setupLogger } from "./logger";
-import { LoggingZkSyncProvider } from "./rpcLoggingProvider";
+import { LoggingEthersJsonRpcProvider, LoggingZkSyncProvider } from "./rpcLoggingProvider";
 import { SimpleTxFlow } from "./transfer";
 import { SEC, unwrap } from "./utils";
 import { WithdrawalFlow } from "./withdrawal";
@@ -23,7 +23,7 @@ const main = async () => {
 
   // For ZKsync OS chains we cannot use `LoggingZkSyncProvider` for getting tx receipt
   // because format of L2 to L1 logs is different. So we create a separate ethers provider for that.
-  const l2EthersProvider = new JsonRpcProvider(unwrap(process.env.CHAIN_RPC_URL));
+  const l2EthersProvider = new LoggingEthersJsonRpcProvider(unwrap(process.env.CHAIN_RPC_URL));
   l2EthersProvider.pollingInterval = 100;
   const zkos_mode = process.env.ZKOS_MODE === "1";
 
