@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { ethers, JsonRpcProvider, Wallet as EthersWallet } from "ethers";
+import { ethers, Wallet as EthersWallet } from "ethers";
 import express from "express";
 import { collectDefaultMetrics, register } from "prom-client";
 import winston from "winston";

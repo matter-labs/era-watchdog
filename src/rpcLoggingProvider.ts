@@ -1,8 +1,9 @@
+import { JsonRpcProvider as EthersJsonRpcProvider } from "ethers";
 import winston from "winston";
 import { Provider as ZkSyncProvider } from "zksync-ethers";
 import { IBridgehub__factory } from "zksync-ethers/build/typechain";
 
-import { JsonRpcProvider as EthersJsonRpcProvider, type Provider as EthersProvider } from "ethers";
+import type { Provider as EthersProvider } from "ethers";
 import type { Fee, TransactionRequest } from "zksync-ethers/build/types";
 
 /**
@@ -50,11 +51,10 @@ class ZkSyncOsProvider extends ZkSyncProvider {
   /**
    * Override send method to intercept and log JSON-RPC calls
    */
-
 }
 
-type Ctor<T = {}> = new (...args: any[]) => T;
-
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Ctor<T = object> = new (...args: any[]) => T;
 
 const LoggingProviderMixing = <TBase extends Ctor<EthersJsonRpcProvider>>(Base: TBase) => {
   return class LoggingProvider extends Base {
@@ -103,8 +103,8 @@ const LoggingProviderMixing = <TBase extends Ctor<EthersJsonRpcProvider>>(Base: 
         throw error;
       }
     }
-  }
-}
+  };
+};
 
 export const LoggingZkSyncProvider = LoggingProviderMixing(ZkSyncOsProvider);
 export const LoggingEthersJsonRpcProvider = LoggingProviderMixing(EthersJsonRpcProvider);
