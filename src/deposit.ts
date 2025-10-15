@@ -52,7 +52,8 @@ export class DepositFlow extends DepositBaseFlow {
     try {
       // even before flow start we check base token allowence and perform an infinitite approve if needed
       if (this.baseToken != ETH_ADDRESS_IN_CONTRACTS) {
-        const allowance = await this.wallet.getAllowanceL1(this.baseToken);
+        const bridgeAddress = await this.sharedBridge.getAddress();
+        const allowance = await this.wallet.getAllowanceL1(this.baseToken, bridgeAddress);
 
         // heuristic condition to determine if we should perform the infinite approval
         if (allowance < parseEther("100000")) {
@@ -60,7 +61,7 @@ export class DepositFlow extends DepositBaseFlow {
           let overrides = {};
           if (this.isZKsyncOS) {
             overrides = {
-              bridgeAddress: await this.sharedBridge.getAddress(),
+              bridgeAddress,
             };
           }
           await this.wallet.approveERC20(this.baseToken, MaxInt256, overrides);
