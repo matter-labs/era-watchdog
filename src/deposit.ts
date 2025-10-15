@@ -57,7 +57,13 @@ export class DepositFlow extends DepositBaseFlow {
         // heuristic condition to determine if we should perform the infinite approval
         if (allowance < parseEther("100000")) {
           this.logger.info(`Approving base token ${this.baseToken} for infinite amount`);
-          await this.wallet.approveERC20(this.baseToken, MaxInt256);
+          let overrides = {};
+          if (this.isZKsyncOS) {
+            overrides = {
+              bridgeAddress: await this.sharedBridge.getAddress(),
+            };
+          }
+          await this.wallet.approveERC20(this.baseToken, MaxInt256, overrides);
         } else {
           this.logger.info(`Base token ${this.baseToken} already has approval`);
         }
