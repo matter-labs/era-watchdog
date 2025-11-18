@@ -8,12 +8,12 @@ import { IL1SharedBridge__factory } from "zksync-ethers/build/typechain";
 
 import { DepositFlow } from "./deposit";
 import { DepositUserFlow } from "./depositUsers";
-import { BlockNumberFlow } from "./getBlockNumber";
 import { Mutex } from "./lock";
 import { setupLogger } from "./logger";
 import { LoggingEthersJsonRpcProvider, LoggingZkSyncProvider } from "./rpcLoggingProvider";
+import { RpcTestFlow } from "./rpcTest";
 import { SimpleTxFlow } from "./transfer";
-import { SEC, unwrap } from "./utils";
+import { unwrap } from "./utils";
 import { WithdrawalFlow } from "./withdrawal";
 import { WithdrawalFinalizeFlow } from "./withdrawalFinalize";
 
@@ -87,10 +87,12 @@ const main = async () => {
       ).run();
       enabledFlows++;
     }
-
-    // Enable block number flow unconditionally in zkos mode
-    new BlockNumberFlow(l2Provider, SEC).run();
-    enabledFlows++;
+    // RPC Test flow (eth_blockNumber)
+    if (process.env.FLOW_RPC_TEST_ENABLE !== "0") {
+      const rpcTestIntervalMs = +(process.env.FLOW_RPC_TEST_INTERVAL ?? 1000);
+      new RpcTestFlow(l2Provider, rpcTestIntervalMs).run();
+      enabledFlows++;
+    }
   } else {
     const wallet = new ZkSyncWallet(unwrap(process.env.WALLET_KEY), l2Provider);
     const paymasterAddress = process.env.PAYMASTER_ADDRESS;
@@ -174,6 +176,13 @@ const main = async () => {
         false,
         +unwrap(process.env.FLOW_WITHDRAWAL_FINALIZE_INTERVAL)
       ).run();
+      enabledFlows++;
+    }
+
+    // RPC Test flow (eth_blockNumber)
+    if (process.env.FLOW_RPC_TEST_ENABLE !== "0") {
+      const rpcTestIntervalMs = +(process.env.FLOW_RPC_TEST_INTERVAL ?? 1000);
+      new RpcTestFlow(l2Provider, rpcTestIntervalMs).run();
       enabledFlows++;
     }
   }
