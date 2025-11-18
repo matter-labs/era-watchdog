@@ -3,7 +3,7 @@ import winston from "winston";
 import { Provider as ZkSyncProvider } from "zksync-ethers";
 import { IBridgehub__factory } from "zksync-ethers/build/typechain";
 
-import type { Provider as EthersProvider } from "ethers";
+import type { Provider as EthersProvider, TransactionReceipt } from "ethers";
 import type { Fee, TransactionRequest } from "zksync-ethers/build/types";
 
 /**
@@ -102,6 +102,44 @@ const LoggingProviderMixing = <TBase extends Ctor<EthersJsonRpcProvider>>(Base: 
 
         throw error;
       }
+    }
+
+    override async waitForTransaction(hash: string, _confirms?: null | number, timeout?: null | number): Promise<null | TransactionReceipt> {
+      const confirms = (_confirms != null) ? _confirms : 1;
+      if (confirms === 0) { return this.getTransactionReceipt(hash); }
+
+      return new Promise(async (resolve, reject) => {
+        let timer: null | NodeJS.Timeout = null;
+
+        const listener = (async (receipt: TransactionReceipt) => {
+          await this.once(hash, listener);
+          try {
+            if (await receipt.confirmations() >= confirms) {
+              resolve(receipt);
+              await this.off(hash, listener);
+              if (timer) {
+                clearTimeout(timer);
+                timer = null;
+              }
+              return;
+            }
+
+          } catch (error) {
+            console.log("EEE", error);
+          }
+        });
+
+        if (timeout != null) {
+          timer = setTimeout(() => {
+            if (timer == null) { return; }
+            timer = null;
+            this.off(hash, listener);
+            reject(new Error("timeout"));
+          }, timeout);
+        }
+
+        this.once(hash, listener);
+      });
     }
   };
 };
