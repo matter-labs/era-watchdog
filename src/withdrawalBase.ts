@@ -76,6 +76,8 @@ export abstract class WithdrawalBaseFlow extends BaseFlow {
     blockType: "latest" | "finalized",
     wallet: string | undefined
   ): Promise<ExecutionResult> {
+    // early return if we intended to disable this functionality
+    if (process.env.MAX_LOGS_BLOCKS_L2 == "0") return null;
     const baseToken = IETHTokenFactory.connect(L2_BASE_TOKEN_ADDRESS, this.wallet._providerL2());
     const filter = baseToken.filters.Withdrawal(wallet, wallet);
     const topBlock = await this.wallet._providerL2().getBlock(blockType);
