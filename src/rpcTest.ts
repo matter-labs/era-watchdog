@@ -5,9 +5,9 @@ import { SEC, timeoutPromise } from "./utils";
 
 import type { Provider } from "zksync-ethers";
 
-const FLOW_NAME = "block_number";
+const FLOW_NAME = "rpc_test";
 
-export class BlockNumberFlow extends BaseFlow {
+export class RpcTestFlow extends BaseFlow {
   constructor(
     private provider: Provider,
     private intervalMs: number

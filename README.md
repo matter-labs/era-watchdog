@@ -134,6 +134,14 @@ Options:
 - `FLOW_WITHDRAWAL_FINALIZE_INTERVAL` -- interval in ms (defaults to 15 minutes)
 - `PRE_V26_BRIDGES` -- set to `1` to use pre-v26 bridge interface (`withdrawalFinalize` requiring `legacySharedBridge` called through `BridgeHub` instead of `L1Nullifier` `depositFinalized` called directly). Setting to `0` is unsupported right now.
 
+### RPC Test
+
+Perform a simple `eth_BlockNumber` request to check if the L2 RPC is available at all.
+
+Options:
+- `FLOW_RPC_TEST_ENABLE` -- set to `0` to disable (enabled by default)
+- `FLOW_RPC_TEST_INTERVAL` -- interval in ms (defaults to 1000 ms = 1 second)
+
 ---
 
 ## License
