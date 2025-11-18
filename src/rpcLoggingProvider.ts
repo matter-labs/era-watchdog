@@ -104,17 +104,23 @@ const LoggingProviderMixing = <TBase extends Ctor<EthersJsonRpcProvider>>(Base: 
       }
     }
 
-    override async waitForTransaction(hash: string, _confirms?: null | number, timeout?: null | number): Promise<null | TransactionReceipt> {
-      const confirms = (_confirms != null) ? _confirms : 1;
-      if (confirms === 0) { return this.getTransactionReceipt(hash); }
+    override async waitForTransaction(
+      hash: string,
+      _confirms?: null | number,
+      timeout?: null | number
+    ): Promise<null | TransactionReceipt> {
+      const confirms = _confirms != null ? _confirms : 1;
+      if (confirms === 0) {
+        return this.getTransactionReceipt(hash);
+      }
 
-      return new Promise(async (resolve, reject) => {
+      return new Promise((resolve, reject) => {
         let timer: null | NodeJS.Timeout = null;
 
-        const listener = (async (receipt: TransactionReceipt) => {
+        const listener = async (receipt: TransactionReceipt) => {
           await this.once(hash, listener);
           try {
-            if (await receipt.confirmations() >= confirms) {
+            if ((await receipt.confirmations()) >= confirms) {
               resolve(receipt);
               await this.off(hash, listener);
               if (timer) {
@@ -123,15 +129,16 @@ const LoggingProviderMixing = <TBase extends Ctor<EthersJsonRpcProvider>>(Base: 
               }
               return;
             }
-
           } catch (error) {
-            console.log("EEE", error);
+            winston.error("Error in waitForTransaction", error);
           }
-        });
+        };
 
         if (timeout != null) {
           timer = setTimeout(() => {
-            if (timer == null) { return; }
+            if (timer == null) {
+              return;
+            }
             timer = null;
             this.off(hash, listener);
             reject(new Error("timeout"));
