@@ -27,6 +27,8 @@ class FlowMetricStore {
   public metric_step_gas: Gauge;
   public metric_step_gas_price: Gauge;
   public metric_step_gas_cost: Gauge;
+  public metric_wallet_info: Gauge;
+  public metric_wallet_balance: Gauge;
 
   constructor() {
     this.metric_latency = new Gauge({
@@ -72,9 +74,32 @@ class FlowMetricStore {
       help: "Watchdog step gas cost (price * used)",
       labelNames: ["flow", "step"],
     });
+    this.metric_wallet_info = new Gauge({
+      name: "watchdog_wallet_info",
+      help: "Watchdog wallet information",
+      labelNames: ["l1_l2_wallet_address", "l2_base_token_address"],
+    });
+    this.metric_wallet_balance = new Gauge({
+      name: "watchdog_wallet_balance",
+      help: "Watchdog wallet balance",
+      labelNames: ["balance_type"],
+    });
   }
 }
 const store = new FlowMetricStore();
+
+export function recordWalletInfo(walletAddress: string, baseTokenAddress: string) {
+  store.metric_wallet_info.set({ l1_l2_wallet_address: walletAddress, l2_base_token_address: baseTokenAddress }, 1);
+}
+
+export function recordL2BaseTokenBalance(balance: number | bigint) {
+  store.metric_wallet_balance.set({ balance_type: "l2_base_token" }, Number(balance));
+}
+
+export function recordL1Balances(baseTokenBalance: number | bigint, ethBalance: number | bigint) {
+  store.metric_wallet_balance.set({ balance_type: "l1_base_token" }, Number(baseTokenBalance));
+  store.metric_wallet_balance.set({ balance_type: "l1_eth" }, Number(ethBalance));
+}
 
 type Numberish = number | bigint | string;
 
