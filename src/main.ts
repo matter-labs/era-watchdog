@@ -30,8 +30,6 @@ const main = async () => {
   l2EthersProvider.pollingInterval = 100;
   const zkos_mode = process.env.ZKOS_MODE === "1";
 
-  const baseTokenAddress = await l2Provider.getBaseTokenContractAddress();
-
   let enabledFlows = 0;
 
   if (zkos_mode) {
@@ -42,7 +40,7 @@ const main = async () => {
     winston.info(
       `Wallet ${wallet.address} L2 balance is ${ethers.formatEther(await l2Provider.getBalance(wallet.address))}`
     );
-    recordWalletInfo(wallet.address, baseTokenAddress);
+    recordWalletInfo(wallet.address);
     if (process.env.FLOW_TRANSFER_ENABLE === "1") {
       new SimpleTxFlow(
         l2Provider,
@@ -115,7 +113,7 @@ const main = async () => {
     winston.info(
       `Wallet ${wallet.address} L2 balance is ${ethers.formatEther(await l2Provider.getBalance(wallet.address))}`
     );
-    recordWalletInfo(wallet.address, baseTokenAddress);
+    recordWalletInfo(wallet.address);
     if (process.env.FLOW_TRANSFER_ENABLE === "1") {
       new SimpleTxFlow(
         l2Provider,
