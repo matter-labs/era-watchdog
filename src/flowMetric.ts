@@ -88,8 +88,10 @@ class FlowMetricStore {
 }
 const store = new FlowMetricStore();
 
-export function recordWalletInfo(walletAddress: string, baseTokenAddress: string) {
-  store.metric_wallet_info.set({ l1_l2_wallet_address: walletAddress, l2_base_token_address: baseTokenAddress }, 1);
+export function recordWalletInfo(walletAddress: string) {
+  // todo: also report `l2_base_token_address`. Reporting an empty string for now.
+  // calling
+  store.metric_wallet_info.set({ l1_l2_wallet_address: walletAddress, l2_base_token_address: "" }, 1);
 }
 
 export function recordL2BaseTokenBalance(balance: number | bigint) {
