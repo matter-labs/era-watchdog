@@ -6,14 +6,16 @@ import winston from "winston";
 import { Provider, Wallet as ZkSyncWallet } from "zksync-ethers";
 import { IL1SharedBridge__factory } from "zksync-ethers/build/typechain";
 
+import { SETTLEMENT_DEADLINE_SEC } from "./configs";
 import { DepositFlow } from "./deposit";
 import { DepositUserFlow } from "./depositUsers";
 import { Mutex } from "./lock";
 import { setupLogger } from "./logger";
 import { LoggingEthersJsonRpcProvider, LoggingZkSyncProvider } from "./rpcLoggingProvider";
 import { RpcTestFlow } from "./rpcTest";
+import { SettlementFlow } from "./settlement";
 import { SimpleTxFlow } from "./transfer";
-import { unwrap } from "./utils";
+import { SEC, unwrap } from "./utils";
 import { WithdrawalFlow } from "./withdrawal";
 import { WithdrawalFinalizeFlow } from "./withdrawalFinalize";
 
@@ -89,8 +91,16 @@ const main = async () => {
     }
     // RPC Test flow (eth_blockNumber)
     if (process.env.FLOW_RPC_TEST_ENABLE !== "0") {
-      const rpcTestIntervalMs = +(process.env.FLOW_RPC_TEST_INTERVAL ?? 1000);
+      const rpcTestIntervalMs = +(process.env.FLOW_RPC_TEST_INTERVAL ?? SEC);
       new RpcTestFlow(l2Provider, rpcTestIntervalMs).run();
+      enabledFlows++;
+    }
+
+    // Settlement flow
+    if (process.env.FLOW_SETTLEMENT_ENABLE === "1") {
+      const l1Provider = new Provider(unwrap(process.env.CHAIN_L1_RPC_URL));
+      const settlementIntervalMs = +(process.env.FLOW_SETTLEMENT_INTERVAL ?? SEC);
+      new SettlementFlow(l2Provider, l1Provider, settlementIntervalMs, SETTLEMENT_DEADLINE_SEC).run();
       enabledFlows++;
     }
   } else {
@@ -183,6 +193,14 @@ const main = async () => {
     if (process.env.FLOW_RPC_TEST_ENABLE !== "0") {
       const rpcTestIntervalMs = +(process.env.FLOW_RPC_TEST_INTERVAL ?? 1000);
       new RpcTestFlow(l2Provider, rpcTestIntervalMs).run();
+      enabledFlows++;
+    }
+
+    // Settlement flow
+    if (process.env.FLOW_SETTLEMENT_ENABLE === "1") {
+      const l1Provider = new Provider(unwrap(process.env.CHAIN_L1_RPC_URL));
+      const settlementIntervalMs = +(process.env.FLOW_SETTLEMENT_INTERVAL ?? 1000);
+      new SettlementFlow(l2Provider, l1Provider, settlementIntervalMs, SETTLEMENT_DEADLINE_SEC).run();
       enabledFlows++;
     }
   }
