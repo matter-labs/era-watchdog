@@ -12,7 +12,7 @@ import {
   PRIORITY_OP_TIMEOUT,
   STEPS,
 } from "./depositBase";
-import { Status } from "./flowMetric";
+import { recordL1Balances, Status } from "./flowMetric";
 import { SEC, MIN, unwrap, timeoutPromise } from "./utils";
 
 import type { BigNumberish, BytesLike, Overrides, Provider as EthersProvider } from "ethers";
@@ -50,7 +50,7 @@ export class DepositFlow extends DepositBaseFlow {
 
   protected async executeWatchdogDeposit(): Promise<Status> {
     try {
-      // even before flow start we check base token allowence and perform an infinitite approve if needed
+      // even before flow start we check base token allowance and perform an unlimited approval if needed
       if (this.baseToken != ETH_ADDRESS_IN_CONTRACTS) {
         const bridgeAddress = await this.sharedBridge.getAddress();
         const allowance = await this.wallet.getAllowanceL1(this.baseToken, bridgeAddress);
@@ -68,8 +68,12 @@ export class DepositFlow extends DepositBaseFlow {
         } else {
           this.logger.info(`Base token ${this.baseToken} already has approval`);
         }
-        const balance = await this.wallet.getBalanceL1(this.baseToken);
-        this.logger.info(`Base token ${this.baseToken} balance: ${formatEther(balance.toString())}`);
+        const baseTokenBalance = await this.wallet.getBalanceL1(this.baseToken);
+        const l1EthBalance = await this.wallet._providerL1().getBalance(this.wallet.address);
+        this.logger.info(
+          `L1 balance: Base token (${this.baseToken}) ${formatEther(baseTokenBalance.toString())}; ETH: ${formatEther(l1EthBalance.toString())}`
+        );
+        recordL1Balances(baseTokenBalance, l1EthBalance);
       }
 
       this.metricRecorder.recordFlowStart();

@@ -9,6 +9,7 @@ import { IL1SharedBridge__factory } from "zksync-ethers/build/typechain";
 import { SETTLEMENT_DEADLINE_SEC } from "./configs";
 import { DepositFlow } from "./deposit";
 import { DepositUserFlow } from "./depositUsers";
+import { recordWalletInfo } from "./flowMetric";
 import { Mutex } from "./lock";
 import { setupLogger } from "./logger";
 import { LoggingEthersJsonRpcProvider, LoggingZkSyncProvider } from "./rpcLoggingProvider";
@@ -29,6 +30,8 @@ const main = async () => {
   l2EthersProvider.pollingInterval = 100;
   const zkos_mode = process.env.ZKOS_MODE === "1";
 
+  const baseTokenAddress = await l2Provider.getBaseTokenContractAddress();
+
   let enabledFlows = 0;
 
   if (zkos_mode) {
@@ -39,6 +42,7 @@ const main = async () => {
     winston.info(
       `Wallet ${wallet.address} L2 balance is ${ethers.formatEther(await l2Provider.getBalance(wallet.address))}`
     );
+    recordWalletInfo(wallet.address, baseTokenAddress);
     if (process.env.FLOW_TRANSFER_ENABLE === "1") {
       new SimpleTxFlow(
         l2Provider,
@@ -111,6 +115,7 @@ const main = async () => {
     winston.info(
       `Wallet ${wallet.address} L2 balance is ${ethers.formatEther(await l2Provider.getBalance(wallet.address))}`
     );
+    recordWalletInfo(wallet.address, baseTokenAddress);
     if (process.env.FLOW_TRANSFER_ENABLE === "1") {
       new SimpleTxFlow(
         l2Provider,

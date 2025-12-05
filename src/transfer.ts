@@ -3,7 +3,7 @@ import { utils } from "zksync-ethers";
 
 import { BaseFlow } from "./baseFlow";
 import { L2_EXECUTION_TIMEOUT } from "./configs";
-import { StatusNoSkip } from "./flowMetric";
+import { recordL2BaseTokenBalance, StatusNoSkip } from "./flowMetric";
 import { SEC, timeoutPromise, unwrap } from "./utils";
 
 import type { Mutex } from "./lock";
@@ -108,6 +108,9 @@ export class SimpleTxFlow extends BaseFlow {
   public async run() {
     while (true) {
       const nextExecutionWait = timeoutPromise(this.intervalMs);
+      // Record L2 balance before each cycle
+      const l2Balance = await this.provider.getBalance(this.wallet.address);
+      recordL2BaseTokenBalance(l2Balance);
       for (let i = 0; i < TRANSFER_RETRY_LIMIT; i++) {
         const result = await this.l2WalletLock.withLock(() => this.step());
         if (result === StatusNoSkip.OK) {
