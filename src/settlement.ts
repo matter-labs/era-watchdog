@@ -73,9 +73,7 @@ export class SettlementFlow extends BaseFlow {
 
               // Check if it exceeds the deadline
               if (settlementAgeSec > this.settlementDeadlineSec) {
-                throw new Error(
-                  `Settlement age ${settlementAgeSec}s exceeds deadline ${this.settlementDeadlineSec}s`
-                );
+                throw new Error(`Settlement age ${settlementAgeSec}s exceeds deadline ${this.settlementDeadlineSec}s`);
               }
             } else {
               // No unsettled blocks

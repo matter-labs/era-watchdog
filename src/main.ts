@@ -15,7 +15,7 @@ import { LoggingEthersJsonRpcProvider, LoggingZkSyncProvider } from "./rpcLoggin
 import { RpcTestFlow } from "./rpcTest";
 import { SettlementFlow } from "./settlement";
 import { SimpleTxFlow } from "./transfer";
-import { unwrap } from "./utils";
+import { SEC, unwrap } from "./utils";
 import { WithdrawalFlow } from "./withdrawal";
 import { WithdrawalFinalizeFlow } from "./withdrawalFinalize";
 
@@ -91,7 +91,7 @@ const main = async () => {
     }
     // RPC Test flow (eth_blockNumber)
     if (process.env.FLOW_RPC_TEST_ENABLE !== "0") {
-      const rpcTestIntervalMs = +(process.env.FLOW_RPC_TEST_INTERVAL ?? 1000);
+      const rpcTestIntervalMs = +(process.env.FLOW_RPC_TEST_INTERVAL ?? SEC);
       new RpcTestFlow(l2Provider, rpcTestIntervalMs).run();
       enabledFlows++;
     }
@@ -99,7 +99,7 @@ const main = async () => {
     // Settlement flow
     if (process.env.FLOW_SETTLEMENT_ENABLE === "1") {
       const l1Provider = new Provider(unwrap(process.env.CHAIN_L1_RPC_URL));
-      const settlementIntervalMs = +(process.env.FLOW_SETTLEMENT_INTERVAL ?? 1000);
+      const settlementIntervalMs = +(process.env.FLOW_SETTLEMENT_INTERVAL ?? SEC);
       new SettlementFlow(l2Provider, l1Provider, settlementIntervalMs, SETTLEMENT_DEADLINE_SEC).run();
       enabledFlows++;
     }
