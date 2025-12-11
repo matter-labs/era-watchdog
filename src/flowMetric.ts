@@ -161,6 +161,7 @@ export class FlowMetricRecorder {
       store.metric_latency_total.set({ flow: this.flowName }, latency);
       store.metric_status.set({ flow: this.flowName }, 1);
       store.metric_status_hist.observe({ flow: this.flowName }, 1);
+      store.metric_status_counter.inc({ flow: this.flowName, outcome: "success" });
       this._lastExecutionTotalLatency = latency;
       this.startTime = null;
       this.logger.info(`Flow completed in ${latency} seconds`);
