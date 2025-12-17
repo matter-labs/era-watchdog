@@ -63,9 +63,10 @@ export class SimpleTxFlow extends BaseFlow {
             ...tx,
             nonce: latestNonce,
           });
-          recordStepGasPrice(unwrap(populated.maxFeePerGas));
+          const gasPrice = unwrap(populated.maxFeePerGas || populated.gasPrice);
+          recordStepGasPrice(gasPrice);
           recordStepGas(unwrap(populated.gasLimit));
-          recordStepGasCost(BigInt(unwrap(populated.gasLimit)) * BigInt(unwrap(populated.maxFeePerGas)));
+          recordStepGasCost(BigInt(unwrap(populated.gasLimit)) * BigInt(gasPrice));
           return populated;
         },
       });
