@@ -17,7 +17,7 @@ export class SettlementFlow extends BaseFlow {
     private l2Provider: ZkSyncProvider,
     private l1Provider: Provider,
     private intervalMs: number,
-    private settlementDeadlineSec: number
+    private settlementDeadline: number
   ) {
     super(FLOW_NAME);
     this.metricSettlementAge = new Gauge({
@@ -72,8 +72,10 @@ export class SettlementFlow extends BaseFlow {
               this.metricSettlementAge.set(settlementAgeSec);
 
               // Check if it exceeds the deadline
-              if (settlementAgeSec > this.settlementDeadlineSec) {
-                throw new Error(`Settlement age ${settlementAgeSec}s exceeds deadline ${this.settlementDeadlineSec}s`);
+              if (settlementAgeSec * SEC > this.settlementDeadline) {
+                throw new Error(
+                  `Settlement age ${settlementAgeSec}s exceeds deadline ${this.settlementDeadline / 1000}s`
+                );
               }
             } else {
               // No unsettled blocks

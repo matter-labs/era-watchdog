@@ -6,7 +6,7 @@ import winston from "winston";
 import { Provider, Wallet as ZkSyncWallet } from "zksync-ethers";
 import { IL1SharedBridge__factory } from "zksync-ethers/build/typechain";
 
-import { SETTLEMENT_DEADLINE_SEC } from "./configs";
+import { SETTLEMENT_DEADLINE } from "./configs";
 import { DepositFlow } from "./deposit";
 import { DepositUserFlow } from "./depositUsers";
 import { recordWalletInfo } from "./flowMetric";
@@ -102,7 +102,7 @@ const main = async () => {
     if (process.env.FLOW_SETTLEMENT_ENABLE === "1") {
       const l1Provider = new Provider(unwrap(process.env.CHAIN_L1_RPC_URL));
       const settlementIntervalMs = +(process.env.FLOW_SETTLEMENT_INTERVAL ?? SEC);
-      new SettlementFlow(l2Provider, l1Provider, settlementIntervalMs, SETTLEMENT_DEADLINE_SEC).run();
+      new SettlementFlow(l2Provider, l1Provider, settlementIntervalMs, SETTLEMENT_DEADLINE).run();
       enabledFlows++;
     }
   } else {
@@ -203,7 +203,7 @@ const main = async () => {
     if (process.env.FLOW_SETTLEMENT_ENABLE === "1") {
       const l1Provider = new Provider(unwrap(process.env.CHAIN_L1_RPC_URL));
       const settlementIntervalMs = +(process.env.FLOW_SETTLEMENT_INTERVAL ?? 1000);
-      new SettlementFlow(l2Provider, l1Provider, settlementIntervalMs, SETTLEMENT_DEADLINE_SEC).run();
+      new SettlementFlow(l2Provider, l1Provider, settlementIntervalMs, SETTLEMENT_DEADLINE).run();
       enabledFlows++;
     }
   }
