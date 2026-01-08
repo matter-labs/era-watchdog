@@ -217,16 +217,6 @@ const main = async () => {
       new SettlementFlow(l2Provider, l1Provider, settlementIntervalMs, SETTLEMENT_DEADLINE).run();
       enabledFlows++;
     }
-
-    // Prividium flow
-    if (process.env.FLOW_PRIVIDIUM_ENABLE === "1") {
-      const prividiumUserPanelUrl = unwrap(process.env.PRIVIDIUM_USER_PANEL_URL);
-      const prividiumApiUrl = unwrap(process.env.PRIVIDIUM_API_URL);
-      const prividiumDomain = new URL(prividiumUserPanelUrl).hostname;
-      const prividiumIntervalMs = +(process.env.FLOW_PRIVIDIUM_INTERVAL ?? 1000);
-      new PrividiumFlow(wallet.address, prividiumDomain, prividiumApiUrl, prividiumIntervalMs).run();
-      enabledFlows++;
-    }
   }
   winston.info(`Enabled ${enabledFlows} flows`);
   if (enabledFlows === 0) {
