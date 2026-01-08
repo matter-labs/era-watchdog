@@ -1,7 +1,7 @@
 import "dotenv/config";
 
 import { BaseFlow } from "./baseFlow";
-import { SEC, timeoutPromise, unwrap } from "./utils";
+import { SEC, timeoutPromise } from "./utils";
 
 const FLOW_NAME = "prividium";
 
@@ -70,4 +70,3 @@ export class PrividiumFlow extends BaseFlow {
     }
   }
 }
-
