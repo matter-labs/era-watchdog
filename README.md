@@ -68,6 +68,8 @@ All configuration is handled via environment variables (see `.env` for examples)
 - `CHAIN_L1_RPC_URL`: L1 JSON-RPC endpoint
 - `L2_EXECUTION_TIMEOUT`: L2 transaction inclusion timeout in ms (default: 15 seconds)
 - `ZKOS_MODE`: Set to `1` to work in ZKOS mode (default: `0`). Only transfer flow will be available.
+- `PRIVIDIUM_USER_PANEL_URL`: URL of the Prividium user panel (required for Prividium flow)
+- `PRIVIDIUM_API_URL`: URL of the Prividium permissions API endpoint (required for Prividium flow)
 
 ### Flow-specific options
 See below for detailed flow configuration.
@@ -153,6 +155,16 @@ Options:
 - `FLOW_SETTLEMENT_ENABLE` -- set to `1` to enable 
 - `SETTLEMENT_DEADLINE` -- acceptable settlement delay in ms (defaults to 1.5 hours)
 - `FLOW_SETTLEMENT_INTERVAL` -- interval in ms (defaults to 1000 ms = 1 second)
+
+### Prividium
+
+Requests SIWE (Sign-In With Ethereum) messages from the Prividium permissions API. This flow is only available for ZKOS mode chains.
+
+Options:
+- `FLOW_PRIVIDIUM_ENABLE` -- set to `1` to enable
+- `PRIVIDIUM_USER_PANEL_URL` -- URL of the Prividium user panel (e.g., `https://user-panel.testnet-prividium.zksync.dev/`)
+- `PRIVIDIUM_API_URL` -- URL of the Prividium permissions API endpoint (e.g., `https://permissions-api.testnet-prividium.zksync.dev/api/siwe-messages/`)
+- `FLOW_PRIVIDIUM_INTERVAL` -- interval in ms (defaults to 1000 ms = 1 second)
 
 ---
 

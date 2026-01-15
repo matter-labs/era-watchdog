@@ -1,5 +1,3 @@
-import "dotenv/config";
-
 import { BaseFlow } from "./baseFlow";
 import { SEC, timeoutPromise } from "./utils";
 
