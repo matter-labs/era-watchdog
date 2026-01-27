@@ -68,8 +68,6 @@ All configuration is handled via environment variables (see `.env` for examples)
 - `CHAIN_L1_RPC_URL`: L1 JSON-RPC endpoint
 - `L2_EXECUTION_TIMEOUT`: L2 transaction inclusion timeout in ms (default: 15 seconds)
 - `ZKOS_MODE`: Set to `1` to work in ZKOS mode (default: `0`). Only transfer flow will be available.
-- `PRIVIDIUM_USER_PANEL_URL`: URL of the Prividium user panel (required for Prividium flow)
-- `PRIVIDIUM_API_URL`: URL of the Prividium permissions API endpoint (required for Prividium flow)
 
 ### Flow-specific options
 See below for detailed flow configuration.
