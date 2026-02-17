@@ -3,7 +3,7 @@ import winston from "winston";
 import { Provider as ZkSyncProvider } from "zksync-ethers";
 import { IBridgehub__factory } from "zksync-ethers/build/typechain";
 
-import type { Provider as EthersProvider, TransactionReceipt } from "ethers";
+import type { Networkish, Provider as EthersProvider, TransactionReceipt } from "ethers";
 import type { Fee, TransactionRequest } from "zksync-ethers/build/types";
 
 /** Optional auth token getter for Prividium (Authorization: Bearer). */
@@ -16,8 +16,8 @@ class AuthableEthersJsonRpcProvider extends EthersJsonRpcProvider {
   declare readonly rpcUrl?: string;
   getAuthToken?: AuthTokenGetter;
 
-  constructor(url?: string , network?: any) {   
-     super(url, network);
+  constructor(url?: string, network?: Networkish) {
+    super(url, network);
     this.rpcUrl = url;
   }
 
@@ -79,6 +79,7 @@ class ZkSyncOsProvider extends ZkSyncProvider {
    */
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function getRpcUrl(provider: any): string | undefined {
   return provider.rpcUrl ?? provider._getConnection?.()?.url;
 }
@@ -106,7 +107,7 @@ const LoggingProviderMixing = <TBase extends Ctor<EthersJsonRpcProvider>>(Base: 
       try {
         let result: unknown;
         const token = self.getAuthToken?.();
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
         const url = getRpcUrl(self);
 
         if (token && url) {
@@ -126,7 +127,10 @@ const LoggingProviderMixing = <TBase extends Ctor<EthersJsonRpcProvider>>(Base: 
           });
           const data = (await res.json()) as { result?: unknown; error?: { code?: number; message?: string } };
           if (!res.ok || data.error) {
-            const err = new Error(data.error?.message ?? `RPC ${res.status}`) as Error & { code?: number; data?: unknown };
+            const err = new Error(data.error?.message ?? `RPC ${res.status}`) as Error & {
+              code?: number;
+              data?: unknown;
+            };
             err.code = data.error?.code;
             err.data = data.error;
             throw err;

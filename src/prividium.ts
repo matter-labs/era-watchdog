@@ -1,7 +1,8 @@
-import type { Signer } from "ethers";
 import { BaseFlow } from "./baseFlow";
 import { runSiweFlow } from "./prividiumAuth";
 import { SEC, timeoutPromise } from "./utils";
+
+import type { Signer } from "ethers";
 
 const FLOW_NAME = "prividium";
 

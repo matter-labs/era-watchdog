@@ -1,5 +1,6 @@
-import type { Signer } from "ethers";
 import winston from "winston";
+
+import type { Signer } from "ethers";
 
 /** Current Prividium auth token; set after successful SIWE flow. */
 let currentToken: string | null = null;
@@ -28,11 +29,7 @@ export interface SiweVerifyResponse {
  * Runs the full SIWE flow: get message from API, sign with wallet, verify and obtain auth token.
  * Use this token in Authorization header for all Prividium RPC and API calls.
  */
-export async function runSiweFlow(
-  signer: Signer,
-  apiUrl: string,
-  domain: string
-): Promise<string> {
+export async function runSiweFlow(signer: Signer, apiUrl: string, domain: string): Promise<string> {
   const address = await signer.getAddress();
 
   const messageRes = await fetch(`${apiUrl}/api/siwe-messages`, {
@@ -63,8 +60,7 @@ export async function runSiweFlow(
   }
 
   const verifyData = (await verifyRes.json()) as SiweVerifyResponse;
-  const token =
-    verifyData.token ?? verifyData.accessToken ?? verifyData.access_token ?? null;
+  const token = verifyData.token ?? verifyData.accessToken ?? verifyData.access_token ?? null;
   if (!token || typeof token !== "string") {
     throw new Error("SIWE verify response missing token (expected token, accessToken, or access_token)");
   }
