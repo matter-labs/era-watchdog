@@ -12,6 +12,7 @@ import { DepositUserFlow } from "./depositUsers";
 import { recordWalletInfo } from "./flowMetric";
 import { Mutex } from "./lock";
 import { setupLogger } from "./logger";
+import { getPrividiumToken, runSiweFlow } from "./prividiumAuth";
 import { PrividiumFlow } from "./prividium";
 import { LoggingEthersJsonRpcProvider, LoggingZkSyncProvider } from "./rpcLoggingProvider";
 import { RpcTestFlow } from "./rpcTest";
@@ -35,6 +36,21 @@ const main = async () => {
 
   if (zkos_mode) {
     l2Provider.setIsZKsyncOS(true);
+
+    if (process.env.FLOW_PRIVIDIUM_ENABLE === "1") {
+      const prividiumApiUrl = unwrap(process.env.PRIVIDIUM_API_URL);
+      // const prividiumVerifyApiUrl = process.env.PRIVIDIUM_VERIFY_API_URL ?? prividiumApiUrl;
+      const prividiumUserPanelUrl = new URL(unwrap(process.env.PRIVIDIUM_USER_PANEL_URL));
+      let prividiumDomain = prividiumUserPanelUrl.hostname;
+      if (prividiumUserPanelUrl.port) {
+        prividiumDomain = `${prividiumDomain}:${prividiumUserPanelUrl.port}`;
+      }
+      const siweSigner = new EthersWallet(unwrap(process.env.WALLET_KEY));
+      await runSiweFlow(siweSigner, prividiumApiUrl, prividiumDomain);
+      l2Provider.setAuthTokenGetter(() => getPrividiumToken());
+      l2EthersProvider.setAuthTokenGetter(() => getPrividiumToken());
+    }
+
     const wallet = new EthersWallet(unwrap(process.env.WALLET_KEY), l2Provider);
     const l2WalletLock = new Mutex();
 
@@ -107,13 +123,13 @@ const main = async () => {
       enabledFlows++;
     }
 
-    // Prividium flow
+    // Prividium flow (refreshes auth token and records metrics)
     if (process.env.FLOW_PRIVIDIUM_ENABLE === "1") {
       const prividiumUserPanelUrl = unwrap(process.env.PRIVIDIUM_USER_PANEL_URL);
       const prividiumApiUrl = unwrap(process.env.PRIVIDIUM_API_URL);
       const prividiumDomain = new URL(prividiumUserPanelUrl).hostname;
       const prividiumIntervalMs = +(process.env.FLOW_PRIVIDIUM_INTERVAL ?? SEC);
-      new PrividiumFlow(wallet.address, prividiumDomain, prividiumApiUrl, prividiumIntervalMs).run();
+      new PrividiumFlow(wallet, prividiumDomain, prividiumApiUrl, prividiumIntervalMs).run();
       enabledFlows++;
     }
   } else {
