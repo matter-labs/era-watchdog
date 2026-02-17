@@ -127,7 +127,6 @@ const main = async () => {
       new SettlementFlow(l2Provider, l1Provider, settlementIntervalMs, SETTLEMENT_DEADLINE).run();
       enabledFlows++;
     }
-
   } else {
     const wallet = new ZkSyncWallet(unwrap(process.env.WALLET_KEY), l2Provider);
     const paymasterAddress = process.env.PAYMASTER_ADDRESS;

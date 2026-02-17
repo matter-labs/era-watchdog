@@ -111,31 +111,7 @@ const LoggingProviderMixing = <TBase extends Ctor<EthersJsonRpcProvider>>(Base: 
         const url = getRpcUrl(self);
 
         if (token && url) {
-          const body = JSON.stringify({
-            jsonrpc: "2.0",
-            id,
-            method,
-            params: Array.isArray(params) ? params : params === undefined ? [] : [params],
-          });
-          const res = await fetch(url, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`,
-            },
-            body,
-          });
-          const data = (await res.json()) as { result?: unknown; error?: { code?: number; message?: string } };
-          if (!res.ok || data.error) {
-            const err = new Error(data.error?.message ?? `RPC ${res.status}`) as Error & {
-              code?: number;
-              data?: unknown;
-            };
-            err.code = data.error?.code;
-            err.data = data.error;
-            throw err;
-          }
-          result = data.result;
+          result = await sendAuthorizedRpcRequest(url, token, id, method, params);
         } else {
           result = await super.send(method, params);
         }
@@ -214,6 +190,40 @@ const LoggingProviderMixing = <TBase extends Ctor<EthersJsonRpcProvider>>(Base: 
     }
   };
 };
+
+async function sendAuthorizedRpcRequest(
+  url: string,
+  token: string,
+  id: number,
+  method: string,
+  params: unknown[] | Record<string, unknown>
+) {
+  const body = JSON.stringify({
+    jsonrpc: "2.0",
+    id,
+    method,
+    params: Array.isArray(params) ? params : params === undefined ? [] : [params],
+  });
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body,
+  });
+  const data = (await res.json()) as { result?: unknown; error?: { code?: number; message?: string } };
+  if (!res.ok || data.error) {
+    const err = new Error(data.error?.message ?? `RPC ${res.status}`) as Error & {
+      code?: number;
+      data?: unknown;
+    };
+    err.code = data.error?.code;
+    err.data = data.error;
+    throw err;
+  }
+  return data.result;
+}
 
 export const LoggingZkSyncProvider = LoggingProviderMixing(ZkSyncOsProvider);
 export const LoggingEthersJsonRpcProvider = LoggingProviderMixing(AuthableEthersJsonRpcProvider);
