@@ -2,6 +2,7 @@ import { BaseFlow } from "./baseFlow";
 import { runSiweFlow } from "./prividiumAuth";
 import { SEC, timeoutPromise } from "./utils";
 
+import type { PrividiumTokenStore } from "./prividiumAuth";
 import type { Signer } from "ethers";
 
 const FLOW_NAME = "prividium";
@@ -11,7 +12,8 @@ export class PrividiumFlow extends BaseFlow {
     private signer: Signer,
     private domain: string,
     private apiUrl: string,
-    private intervalMs: number
+    private intervalMs: number,
+    private tokenStore: PrividiumTokenStore
   ) {
     super(FLOW_NAME);
   }
@@ -27,7 +29,7 @@ export class PrividiumFlow extends BaseFlow {
           stepName: "siwe_full_flow",
           stepTimeoutMs: 10 * SEC,
           fn: async () => {
-            await runSiweFlow(this.signer, this.apiUrl, this.domain);
+            await runSiweFlow(this.signer, this.apiUrl, this.domain, this.tokenStore);
           },
         });
 

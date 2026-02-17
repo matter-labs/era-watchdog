@@ -2,15 +2,9 @@ import winston from "winston";
 
 import type { Signer } from "ethers";
 
-/** Current Prividium auth token; set after successful SIWE flow. */
-let currentToken: string | null = null;
-
-export function getPrividiumToken(): string | null {
-  return currentToken;
-}
-
-export function setPrividiumToken(token: string | null): void {
-  currentToken = token;
+/** Shared mutable container for the current Prividium auth token. */
+export interface PrividiumTokenStore {
+  token: string | null;
 }
 
 export interface SiweMessageResponse {
@@ -27,9 +21,15 @@ export interface SiweVerifyResponse {
 
 /**
  * Runs the full SIWE flow: get message from API, sign with wallet, verify and obtain auth token.
+ * If a token store is provided, it will be updated with the new token.
  * Use this token in Authorization header for all Prividium RPC and API calls.
  */
-export async function runSiweFlow(signer: Signer, apiUrl: string, domain: string): Promise<string> {
+export async function runSiweFlow(
+  signer: Signer,
+  apiUrl: string,
+  domain: string,
+  tokenStore: PrividiumTokenStore
+): Promise<string> {
   const address = await signer.getAddress();
 
   const messageRes = await fetch(`${apiUrl}/api/siwe-messages`, {
@@ -65,7 +65,8 @@ export async function runSiweFlow(signer: Signer, apiUrl: string, domain: string
     throw new Error("SIWE verify response missing token (expected token, accessToken, or access_token)");
   }
 
-  setPrividiumToken(token);
+  tokenStore.token = token;
+
   winston.info("Prividium SIWE flow completed; auth token set");
   return token;
 }
