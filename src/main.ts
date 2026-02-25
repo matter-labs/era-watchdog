@@ -23,15 +23,28 @@ import { WithdrawalFlow } from "./withdrawal";
 import { WithdrawalFinalizeFlow } from "./withdrawalFinalize";
 
 import type { PrividiumTokenStore } from "./prividiumAuth";
+import type { JsonRpcApiProviderOptions } from "ethers";
+
+function getProviderOptions(opts?: JsonRpcApiProviderOptions): JsonRpcApiProviderOptions {
+  return {
+    ...opts,
+    staticNetwork: true, // avoid repeated eth_chainId calls
+  };
+}
 
 const main = async () => {
   setupLogger(process.env.NODE_ENV, process.env.LOG_LEVEL);
-  const l2Provider = new LoggingZkSyncProvider(unwrap(process.env.CHAIN_RPC_URL));
+  const l2Provider = new LoggingZkSyncProvider(unwrap(process.env.CHAIN_RPC_URL), undefined, getProviderOptions());
 
   // For ZKsync OS chains we cannot use `LoggingZkSyncProvider` for getting tx receipt
   // because format of L2 to L1 logs is different. So we create a separate ethers provider for that.
-  const l2EthersProvider = new LoggingEthersJsonRpcProvider(unwrap(process.env.CHAIN_RPC_URL));
-  l2EthersProvider.pollingInterval = 100;
+  const l2EthersProvider = new LoggingEthersJsonRpcProvider(
+    unwrap(process.env.CHAIN_RPC_URL),
+    undefined,
+    getProviderOptions({
+      pollingInterval: 100,
+    })
+  );
   const zkos_mode = process.env.ZKOS_MODE === "1";
 
   let enabledFlows = 0;
@@ -76,7 +89,7 @@ const main = async () => {
     }
 
     if (process.env.FLOW_DEPOSIT_ENABLE === "1") {
-      const l1Provider = new Provider(unwrap(process.env.CHAIN_L1_RPC_URL));
+      const l1Provider = new Provider(unwrap(process.env.CHAIN_L1_RPC_URL), undefined, getProviderOptions());
       l2Provider.setL1Provider(l1Provider);
 
       const walletDeposit = new ZkSyncWallet(unwrap(process.env.WALLET_KEY), l2Provider, l1Provider);
@@ -122,7 +135,7 @@ const main = async () => {
 
     // Settlement flow
     if (process.env.FLOW_SETTLEMENT_ENABLE === "1") {
-      const l1Provider = new Provider(unwrap(process.env.CHAIN_L1_RPC_URL));
+      const l1Provider = new Provider(unwrap(process.env.CHAIN_L1_RPC_URL), undefined, getProviderOptions());
       const settlementIntervalMs = +(process.env.FLOW_SETTLEMENT_INTERVAL ?? SEC);
       new SettlementFlow(l2Provider, l1Provider, settlementIntervalMs, SETTLEMENT_DEADLINE).run();
       enabledFlows++;
@@ -148,7 +161,7 @@ const main = async () => {
     }
 
     if (process.env.FLOW_DEPOSIT_ENABLE === "1" || process.env.FLOW_DEPOSIT_USER_ENABLE === "1") {
-      const l1Provider = new Provider(unwrap(process.env.CHAIN_L1_RPC_URL));
+      const l1Provider = new Provider(unwrap(process.env.CHAIN_L1_RPC_URL), undefined, getProviderOptions());
       const walletDeposit = new ZkSyncWallet(unwrap(process.env.WALLET_KEY), l2Provider, l1Provider);
       const l1BridgeContracts = await walletDeposit.getL1BridgeContracts();
       const chainId = (await walletDeposit.provider.getNetwork()).chainId;
@@ -199,7 +212,11 @@ const main = async () => {
     if (process.env.FLOW_WITHDRAWAL_FINALIZE_ENABLE === "1") {
       // We need a wallet with both L2 and L1 providers for withdrawal finalization
       // Create a new wallet with L1 provider
-      const l1ProviderForWithdrawal = new LoggingZkSyncProvider(unwrap(process.env.CHAIN_L1_RPC_URL));
+      const l1ProviderForWithdrawal = new LoggingZkSyncProvider(
+        unwrap(process.env.CHAIN_L1_RPC_URL),
+        undefined,
+        getProviderOptions()
+      );
       const walletForWithdrawals = new ZkSyncWallet(
         unwrap(process.env.WALLET_KEY),
         l2Provider,
@@ -223,7 +240,7 @@ const main = async () => {
 
     // Settlement flow
     if (process.env.FLOW_SETTLEMENT_ENABLE === "1") {
-      const l1Provider = new Provider(unwrap(process.env.CHAIN_L1_RPC_URL));
+      const l1Provider = new Provider(unwrap(process.env.CHAIN_L1_RPC_URL), undefined, getProviderOptions());
       const settlementIntervalMs = +(process.env.FLOW_SETTLEMENT_INTERVAL ?? 1000);
       new SettlementFlow(l2Provider, l1Provider, settlementIntervalMs, SETTLEMENT_DEADLINE).run();
       enabledFlows++;

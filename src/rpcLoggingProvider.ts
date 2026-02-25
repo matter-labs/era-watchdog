@@ -3,7 +3,7 @@ import winston from "winston";
 import { Provider as ZkSyncProvider } from "zksync-ethers";
 import { IBridgehub__factory } from "zksync-ethers/build/typechain";
 
-import type { Networkish, Provider as EthersProvider, TransactionReceipt } from "ethers";
+import type { Networkish, Provider as EthersProvider, TransactionReceipt, JsonRpcApiProviderOptions } from "ethers";
 import type { Fee, TransactionRequest } from "zksync-ethers/build/types";
 
 /** Optional auth token getter for Prividium (Authorization: Bearer). */
@@ -16,8 +16,8 @@ class AuthableEthersJsonRpcProvider extends EthersJsonRpcProvider {
   declare readonly rpcUrl?: string;
   getAuthToken?: AuthTokenGetter;
 
-  constructor(url?: string, network?: Networkish) {
-    super(url, network);
+  constructor(url?: string, network?: Networkish, options?: JsonRpcApiProviderOptions) {
+    super(url, network, options);
     this.rpcUrl = url;
   }
 
@@ -35,8 +35,8 @@ class ZkSyncOsProvider extends ZkSyncProvider {
   protected readonly rpcUrl: string;
   getAuthToken?: AuthTokenGetter;
 
-  constructor(url: string) {
-    super(url);
+  constructor(url: string, network?: Networkish, options?: JsonRpcApiProviderOptions) {
+    super(url, network, options);
     this.rpcUrl = url;
   }
 
@@ -118,6 +118,13 @@ const LoggingProviderMixing = <TBase extends Ctor<EthersJsonRpcProvider>>(Base: 
 
         const duration = Date.now() - startTime;
         winston.debug(`[JSON-RPC Response] ID: ${id} Method: ${method} Duration: ${duration}ms`, {
+          rpcResponse: {
+            id,
+            method,
+          },
+        });
+        // Log the full response result at a lower level to avoid cluttering logs, but still have it available for debugging when needed
+        winston.silly(`[JSON-RPC Response Result] ID: ${id} Method: ${method}`, {
           rpcResponse: {
             id,
             method,
