@@ -1,9 +1,9 @@
 import "dotenv/config";
-import { ethers, Wallet as EthersWallet } from "ethers";
+import { ethers } from "ethers";
 import express from "express";
 import { collectDefaultMetrics, register } from "prom-client";
 import winston from "winston";
-import { Provider, Wallet as ZkSyncWallet } from "zksync-ethers";
+import { Provider } from "zksync-ethers";
 import { IL1SharedBridge__factory } from "zksync-ethers/build/typechain";
 
 import { SETTLEMENT_DEADLINE } from "./configs";
@@ -19,6 +19,7 @@ import { RpcTestFlow } from "./rpcTest";
 import { SettlementFlow } from "./settlement";
 import { SimpleTxFlow } from "./transfer";
 import { SEC, unwrap } from "./utils";
+import { createEthersSigner, createZkSyncWallet } from "./walletFactory";
 import { WithdrawalFlow } from "./withdrawal";
 import { WithdrawalFinalizeFlow } from "./withdrawalFinalize";
 
@@ -56,7 +57,7 @@ const main = async () => {
     if (process.env.FLOW_PRIVIDIUM_ENABLE === "1") {
       const prividiumApiUrl = unwrap(process.env.FLOW_PRIVIDIUM_API_URL);
       const prividiumDomain = unwrap(process.env.FLOW_PRIVIDIUM_DOMAIN);
-      const siweSigner = new EthersWallet(unwrap(process.env.WALLET_KEY));
+      const siweSigner = await createEthersSigner(unwrap(process.env.WALLET_KEY));
       const prividiumTokenStore: PrividiumTokenStore = { token: null };
 
       await runSiweFlow(siweSigner, prividiumApiUrl, prividiumDomain, prividiumTokenStore);
@@ -69,13 +70,14 @@ const main = async () => {
       enabledFlows++;
     }
 
-    const wallet = new EthersWallet(unwrap(process.env.WALLET_KEY), l2Provider);
+    const wallet = await createEthersSigner(unwrap(process.env.WALLET_KEY), l2Provider);
     const l2WalletLock = new Mutex();
 
+    const walletAddress = await wallet.getAddress();
     winston.info(
-      `Wallet ${wallet.address} L2 balance is ${ethers.formatEther(await l2Provider.getBalance(wallet.address))}`
+      `Wallet ${walletAddress} L2 balance is ${ethers.formatEther(await l2Provider.getBalance(walletAddress))}`
     );
-    recordWalletInfo(wallet.address);
+    recordWalletInfo(walletAddress);
     if (process.env.FLOW_TRANSFER_ENABLE === "1") {
       new SimpleTxFlow(
         l2Provider,
@@ -92,7 +94,7 @@ const main = async () => {
       const l1Provider = new Provider(unwrap(process.env.CHAIN_L1_RPC_URL), undefined, getProviderOptions());
       l2Provider.setL1Provider(l1Provider);
 
-      const walletDeposit = new ZkSyncWallet(unwrap(process.env.WALLET_KEY), l2Provider, l1Provider);
+      const walletDeposit = await createZkSyncWallet(unwrap(process.env.WALLET_KEY), l2Provider, l1Provider);
       const chainId = (await walletDeposit.provider.getNetwork()).chainId;
       const baseToken = await walletDeposit.getBaseToken();
 
@@ -115,7 +117,7 @@ const main = async () => {
     }
 
     if (process.env.FLOW_WITHDRAWAL_ENABLE === "1") {
-      const wallet = new ZkSyncWallet(unwrap(process.env.WALLET_KEY), l2Provider);
+      const wallet = await createZkSyncWallet(unwrap(process.env.WALLET_KEY), l2Provider);
       new WithdrawalFlow(
         wallet,
         void 0,
@@ -141,7 +143,7 @@ const main = async () => {
       enabledFlows++;
     }
   } else {
-    const wallet = new ZkSyncWallet(unwrap(process.env.WALLET_KEY), l2Provider);
+    const wallet = await createZkSyncWallet(unwrap(process.env.WALLET_KEY), l2Provider);
     const paymasterAddress = process.env.PAYMASTER_ADDRESS;
     const l2WalletLock = new Mutex();
 
@@ -162,7 +164,7 @@ const main = async () => {
 
     if (process.env.FLOW_DEPOSIT_ENABLE === "1" || process.env.FLOW_DEPOSIT_USER_ENABLE === "1") {
       const l1Provider = new Provider(unwrap(process.env.CHAIN_L1_RPC_URL), undefined, getProviderOptions());
-      const walletDeposit = new ZkSyncWallet(unwrap(process.env.WALLET_KEY), l2Provider, l1Provider);
+      const walletDeposit = await createZkSyncWallet(unwrap(process.env.WALLET_KEY), l2Provider, l1Provider);
       const l1BridgeContracts = await walletDeposit.getL1BridgeContracts();
       const chainId = (await walletDeposit.provider.getNetwork()).chainId;
       const baseToken = await walletDeposit.getBaseToken();
@@ -217,7 +219,7 @@ const main = async () => {
         undefined,
         getProviderOptions()
       );
-      const walletForWithdrawals = new ZkSyncWallet(
+      const walletForWithdrawals = await createZkSyncWallet(
         unwrap(process.env.WALLET_KEY),
         l2Provider,
         l1ProviderForWithdrawal

@@ -30,7 +30,7 @@ Maintaining a healthy chain is critical, including during periods of low activit
 Configure `.env` file with at least following options:
 
 ```env
-WALLET_KEY=0xdeadbeef  # Wallet key to use
+WALLET_KEY=0xdeadbeef  # Hex private key, or a GCP KMS resource name (projects/...)
 CHAIN_RPC_URL=http://127.0.0.1:3052 # l2 json-rpc endpoint
 PAYMASTER_ADDRESS=0x111C3E89Ce80e62EE88318C2804920D4c96f92bb  # if using paymaster for transactions
 METRICS_PORT=8090  # Override to avoid collisions with zkstack server
@@ -63,7 +63,7 @@ All configuration is handled via environment variables (see `.env` for examples)
 - `NODE_ENV`: `production` or `dev` (default: `dev`)
 - `LOG_LEVEL`: Logging verbosity
 - `CHAIN_RPC_URL`: L2 JSON-RPC endpoint
-- `WALLET_KEY`: Watchdog wallet key (`0x`-prefixed hex string)
+- `WALLET_KEY`: Watchdog wallet key — either a `0x`-prefixed hex private key **or** a GCP KMS resource name (see [GCP KMS support](#gcp-kms-support) below)
 - `PAYMASTER_ADDRESS`: (optional) Use paymaster for L2 transactions
 - `METRICS_PORT`: Prometheus metrics port (default: `8080`)
 - `CHAIN_L1_RPC_URL`: L1 JSON-RPC endpoint
@@ -166,6 +166,36 @@ Options:
 - `FLOW_PRIVIDIUM_DOMAIN` -- Domain for the SIWE message (e.g., `user-panel.testnet-prividium.zksync.dev`)
 - `FLOW_PRIVIDIUM_API_URL` -- Base URL of the Prividium permissions API (e.g., `https://permissions-api.testnet-prividium.zksync.dev`). The flow appends `/api/siwe-messages` and `/api/auth/login/crypto-native` automatically.
 - `FLOW_PRIVIDIUM_INTERVAL` -- interval in ms (defaults to 1000 ms = 1 second)
+
+## GCP KMS support
+
+Instead of providing a raw hex private key in `WALLET_KEY`, you can pass a GCP Cloud KMS resource name. The watchdog will automatically detect the format (any value starting with `projects/` is treated as a KMS key) and use Google Application Default Credentials to sign all transactions via KMS.
+
+### KMS key requirements
+
+- **Algorithm:** `EC_SIGN_SECP256K1_SHA256`
+- **Purpose:** `ASYMMETRIC_SIGN`
+- The resource name must include the key version, e.g.:
+  ```
+  projects/my-project/locations/global/keyRings/my-ring/cryptoKeys/my-key/cryptoKeyVersions/1
+  ```
+
+### Authentication
+
+The signer uses [Application Default Credentials](https://cloud.google.com/docs/authentication/application-default-credentials) (ADC). On GKE with Workload Identity, credentials are injected automatically via the service account. No additional key files are needed.
+
+The service account must have the following IAM permissions on the KMS key:
+- `cloudkms.cryptoKeyVersions.useToSign`
+- `cloudkms.cryptoKeyVersions.viewPublicKey`
+
+### Example `.env`
+
+```env
+WALLET_KEY=projects/my-project/locations/us-east1/keyRings/watchdog/cryptoKeys/signer/cryptoKeyVersions/1
+CHAIN_RPC_URL=http://127.0.0.1:3052
+FLOW_TRANSFER_ENABLE=1
+FLOW_TRANSFER_INTERVAL=60000
+```
 
 ---
 

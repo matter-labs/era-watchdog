@@ -7,8 +7,11 @@ import { recordL2BaseTokenBalance, StatusNoSkip } from "./flowMetric";
 import { SEC, timeoutPromise, unwrap } from "./utils";
 
 import type { Mutex } from "./lock";
-import type { Provider as EthersProvider, Wallet as EthersWallet } from "ethers";
+import type { Provider as EthersProvider, Signer as EthersSigner } from "ethers";
 import type { types, Provider, Wallet as ZkSyncWallet } from "zksync-ethers";
+
+/** A Signer that also exposes a synchronous `.address` property. */
+type SignerWithAddress = EthersSigner & { readonly address: string };
 
 const FLOW_NAME = "transfer";
 const TRANSFER_RETRY_LIMIT = +(process.env.FLOW_TRANSFER_RETRY_LIMIT ?? 5);
@@ -17,7 +20,7 @@ const TRANSFER_RETRY_INTERVAL = +(process.env.FLOW_TRANSFER_RETRY_INTERVAL ?? 5 
 export class SimpleTxFlow extends BaseFlow {
   constructor(
     private provider: Provider,
-    private wallet: ZkSyncWallet | EthersWallet,
+    private wallet: ZkSyncWallet | SignerWithAddress,
     private l2WalletLock: Mutex,
     private paymasterAddress: string | undefined,
     private intervalMs: number,
