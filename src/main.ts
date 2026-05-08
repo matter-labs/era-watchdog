@@ -57,16 +57,16 @@ const main = async () => {
     if (process.env.FLOW_PRIVIDIUM_ENABLE === "1") {
       const prividiumApiUrl = unwrap(process.env.FLOW_PRIVIDIUM_API_URL);
       const prividiumDomain = unwrap(process.env.FLOW_PRIVIDIUM_DOMAIN);
-      const siweSigner = await createEthersSigner(unwrap(process.env.WALLET_KEY));
+      const wallet = await createEthersSigner(unwrap(process.env.WALLET_KEY));
       const prividiumTokenStore: PrividiumTokenStore = { token: null };
 
-      await runSiweFlow(siweSigner, prividiumApiUrl, prividiumDomain, prividiumTokenStore);
+      await runSiweFlow(wallet, prividiumApiUrl, prividiumDomain, prividiumTokenStore);
       l2Provider.setAuthTokenGetter(() => prividiumTokenStore.token);
       l2EthersProvider.setAuthTokenGetter(() => prividiumTokenStore.token);
 
       // Prividium flow (refreshes auth token and records metrics)
       const prividiumIntervalMs = +(process.env.FLOW_PRIVIDIUM_INTERVAL ?? SEC);
-      new PrividiumFlow(siweSigner, prividiumDomain, prividiumApiUrl, prividiumIntervalMs, prividiumTokenStore).run();
+      new PrividiumFlow(wallet, prividiumDomain, prividiumApiUrl, prividiumIntervalMs, prividiumTokenStore).run();
       enabledFlows++;
     }
 

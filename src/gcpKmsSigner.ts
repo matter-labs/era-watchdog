@@ -1,3 +1,5 @@
+import { secp256k1 } from "@noble/curves/secp256k1";
+import { createPublicKey } from "crypto";
 import { ethers } from "ethers";
 import winston from "winston";
 
@@ -70,8 +72,6 @@ export class GcpKmsSigner extends ethers.AbstractSigner {
       throw new Error("GCP KMS returned an empty public key PEM");
     }
 
-    // The PEM contains a DER-encoded SubjectPublicKeyInfo.
-    // We extract the raw 65-byte uncompressed EC point from it.
     const uncompressedKey = deriveUncompressedPublicKeyFromPem(publicKeyResponse.pem);
     this.cachedPublicKey = ethers.hexlify(uncompressedKey);
     this.cachedAddress = ethers.computeAddress(this.cachedPublicKey);
@@ -130,20 +130,16 @@ export class GcpKmsSigner extends ethers.AbstractSigner {
         ? signResponse.signature
         : new Uint8Array(Buffer.from(signResponse.signature as string, "base64"));
 
-    const { r, s } = parseDerSignature(sigBuffer);
-
-    // Normalise s to low-s form (EIP-2).
-    const secp256k1N = BigInt("0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141");
-    const halfN = secp256k1N / 2n;
-    const sBig = BigInt("0x" + s);
-    const sNormalised = sBig > halfN ? (secp256k1N - sBig).toString(16).padStart(64, "0") : s;
+    const sig = secp256k1.Signature.fromDER(sigBuffer).normalizeS();
+    const r = sig.r.toString(16).padStart(64, "0");
+    const s = sig.s.toString(16).padStart(64, "0");
 
     // Determine recovery id (v) by trying both 0 and 1.
     const expectedAddress = await this.getAddress();
     for (const v of [27, 28]) {
-      const candidate = ethers.recoverAddress(digest, { r: "0x" + r, s: "0x" + sNormalised, v });
+      const candidate = ethers.recoverAddress(digest, { r: "0x" + r, s: "0x" + s, v });
       if (candidate.toLowerCase() === expectedAddress.toLowerCase()) {
-        return { r: "0x" + r, s: "0x" + sNormalised, v };
+        return { r: "0x" + r, s: "0x" + s, v };
       }
     }
 
@@ -157,61 +153,9 @@ export class GcpKmsSigner extends ethers.AbstractSigner {
   }
 }
 
-// =============================================================================
-//  Pure helpers
-// =============================================================================
-
-/**
- * Extracts the 65-byte uncompressed public key (04 || x || y) from a
- * PEM-encoded SubjectPublicKeyInfo structure returned by GCP KMS.
- */
 function deriveUncompressedPublicKeyFromPem(pem: string): Uint8Array {
-  const base64 = pem
-    .replace(/-----BEGIN PUBLIC KEY-----/, "")
-    .replace(/-----END PUBLIC KEY-----/, "")
-    .replace(/\s+/g, "");
-  const der = Buffer.from(base64, "base64");
-
-  // SubjectPublicKeyInfo for secp256k1 has a fixed 23-byte header,
-  // followed by the 65-byte uncompressed key (04 || x || y).
-  // We look for the 0x04 prefix that starts the uncompressed point.
-  const keyStart = der.indexOf(0x04, 20); // skip the ASN.1 header
-  if (keyStart === -1 || der.length - keyStart < 65) {
-    throw new Error("Cannot extract uncompressed public key from PEM");
-  }
-  return new Uint8Array(der.buffer, der.byteOffset + keyStart, 65);
-}
-
-/**
- * Parses an ASN.1 DER-encoded ECDSA signature into (r, s) hex strings
- * each zero-padded to 64 hex characters.
- */
-function parseDerSignature(der: Uint8Array): { r: string; s: string } {
-  // SEQUENCE { INTEGER r, INTEGER s }
-  if (der[0] !== 0x30) throw new Error("Invalid DER signature: no SEQUENCE tag");
-
-  let offset = 2; // skip SEQUENCE tag + length
-
-  // r
-  if (der[offset] !== 0x02) throw new Error("Invalid DER signature: no INTEGER tag for r");
-  const rLen = der[offset + 1];
-  offset += 2;
-  const rBytes = der.slice(offset, offset + rLen);
-  offset += rLen;
-
-  // s
-  if (der[offset] !== 0x02) throw new Error("Invalid DER signature: no INTEGER tag for s");
-  const sLen = der[offset + 1];
-  offset += 2;
-  const sBytes = der.slice(offset, offset + sLen);
-
-  // Strip any leading zero byte (ASN.1 uses it for positive sign)
-  const rHex = Buffer.from(rBytes[0] === 0 ? rBytes.slice(1) : rBytes)
-    .toString("hex")
-    .padStart(64, "0");
-  const sHex = Buffer.from(sBytes[0] === 0 ? sBytes.slice(1) : sBytes)
-    .toString("hex")
-    .padStart(64, "0");
-
-  return { r: rHex, s: sHex };
+  const jwk = createPublicKey(pem).export({ format: "jwk" }) as { x: string; y: string };
+  const x = Buffer.from(jwk.x, "base64url");
+  const y = Buffer.from(jwk.y, "base64url");
+  return new Uint8Array([0x04, ...x, ...y]);
 }
