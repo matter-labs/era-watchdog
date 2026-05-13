@@ -82,8 +82,10 @@ export class GcpKmsSigner extends ethers.AbstractSigner {
   // ---- signing ---------------------------------------------------------------
 
   async signTransaction(tx: ethers.TransactionRequest): Promise<string> {
-    const resolved = await ethers.resolveProperties(tx);
-    const unsignedTx = ethers.Transaction.from(resolved as ethers.TransactionLike);
+    const unsignedTx =
+      tx instanceof ethers.Transaction
+        ? ethers.Transaction.from(tx)
+        : ethers.Transaction.from((await ethers.resolveProperties(tx)) as ethers.TransactionLike);
     const digest = ethers.keccak256(unsignedTx.unsignedSerialized);
     const sig = await this.kmsSign(digest);
     unsignedTx.signature = sig;
