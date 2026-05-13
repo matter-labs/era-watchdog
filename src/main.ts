@@ -164,6 +164,7 @@ const main = async () => {
 
     if (process.env.FLOW_DEPOSIT_ENABLE === "1" || process.env.FLOW_DEPOSIT_USER_ENABLE === "1") {
       const l1Provider = new Provider(unwrap(process.env.CHAIN_L1_RPC_URL), undefined, getProviderOptions());
+      l2Provider.setL1Provider(l1Provider);
       const walletDeposit = await createZkSyncWallet(unwrap(process.env.WALLET_KEY), l2Provider, l1Provider);
       const l1BridgeContracts = await walletDeposit.getL1BridgeContracts();
       const chainId = (await walletDeposit.provider.getNetwork()).chainId;
