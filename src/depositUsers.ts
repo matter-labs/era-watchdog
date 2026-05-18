@@ -21,6 +21,9 @@ const FLOW_NAME = "depositUser";
 export class DepositUserFlow extends DepositBaseFlow {
   private lastOnChainOperationTimestamp: number = 0;
   private metricTimeSinceLastDeposit: Gauge;
+  /// L1 hash of the most recently logged deposit; used to suppress repeat
+  /// `Reported … deposit` log lines while metrics keep updating.
+  private lastReportedL1Hash: string | null = null;
 
   constructor(
     wallet: Wallet,
@@ -41,6 +44,7 @@ export class DepositUserFlow extends DepositBaseFlow {
   }
 
   private recordDepositResult(result: ExecutionResultKnown) {
+    const isRepeat = result.l1Receipt.hash === this.lastReportedL1Hash;
     if (result.status === Status.OK) {
       this.metricRecorder.manualRecordStatus(result.status, unwrap(result.timestampL2) - result.timestampL1);
       this.metricRecorder.manualRecordStepCompletion(
@@ -66,18 +70,23 @@ export class DepositUserFlow extends DepositBaseFlow {
         unwrap(result.l2Receipt).gasUsed * unwrap(result.l2Receipt).gasPrice
       );
       this.metricTimeSinceLastDeposit.set(result.secSinceL1Deposit);
-      this.logger.info(
-        `Reported successful deposit. L1 hash: ${result.l1Receipt.hash}, L2 hash: ${result.l2Receipt?.hash}`
-      );
+      if (!isRepeat) {
+        this.logger.info(
+          `Reported successful deposit. L1 hash: ${result.l1Receipt.hash}, L2 hash: ${result.l2Receipt?.hash}`
+        );
+      }
     } else if (result.status === Status.FAIL) {
-      this.logger.info(
-        `Reported failed deposit. L1 hash: ${result.l1Receipt.hash}, L2 hash: ${result.l2Receipt?.hash}`
-      );
+      if (!isRepeat) {
+        this.logger.info(
+          `Reported failed deposit. L1 hash: ${result.l1Receipt.hash}, L2 hash: ${result.l2Receipt?.hash}`
+        );
+      }
       this.metricRecorder.manualRecordStatus(result.status, 0);
     } else {
       const _impossible: never = result.status;
       throw new Error(`Unexpected status ${result.status}`);
     }
+    this.lastReportedL1Hash = result.l1Receipt.hash;
   }
 
   private async executeDepositTx(): Promise<Status> {
