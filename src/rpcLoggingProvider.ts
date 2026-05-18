@@ -87,18 +87,6 @@ function getRpcUrl(provider: any): string | undefined {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Ctor<T = object> = new (...args: any[]) => T;
 
-// `isLogLevelEnabled` isn't typed on the default-export shape, so compare
-// priorities ourselves. Higher number = more verbose; a level is enabled when
-// its priority is <= the configured logger level's priority.
-function isLogLevelEnabled(level: string): boolean {
-  const levels = winston.config.npm.levels as Record<string, number>;
-  const configured = (winston as unknown as { level?: string }).level ?? "info";
-  const target = levels[level];
-  const current = levels[configured];
-  if (target == null || current == null) return true;
-  return target <= current;
-}
-
 const LoggingProviderMixing = <TBase extends Ctor<EthersJsonRpcProvider>>(Base: TBase) => {
   return class LoggingProvider extends Base {
     private requestId: number = 1;
@@ -107,15 +95,13 @@ const LoggingProviderMixing = <TBase extends Ctor<EthersJsonRpcProvider>>(Base: 
       const id = this.requestId++;
       const self = this as typeof this & { getAuthToken?: AuthTokenGetter };
 
-      if (isLogLevelEnabled("debug")) {
-        winston.debug(`[JSON-RPC Request] ID: ${id} Method: ${method}`, {
-          rpcRequest: {
-            id,
-            method,
-            params: JSON.stringify(params, (_, value) => (typeof value === "bigint" ? value.toString() : value)),
-          },
-        });
-      }
+      winston.debug(`[JSON-RPC Request] ID: ${id} Method: ${method}`, {
+        rpcRequest: {
+          id,
+          method,
+          params: JSON.stringify(params, (_, value) => (typeof value === "bigint" ? value.toString() : value)),
+        },
+      });
 
       const startTime = Date.now();
       try {
@@ -131,24 +117,20 @@ const LoggingProviderMixing = <TBase extends Ctor<EthersJsonRpcProvider>>(Base: 
         }
 
         const duration = Date.now() - startTime;
-        if (isLogLevelEnabled("debug")) {
-          winston.debug(`[JSON-RPC Response] ID: ${id} Method: ${method} Duration: ${duration}ms`, {
-            rpcResponse: {
-              id,
-              method,
-            },
-          });
-        }
+        winston.debug(`[JSON-RPC Response] ID: ${id} Method: ${method} Duration: ${duration}ms`, {
+          rpcResponse: {
+            id,
+            method,
+          },
+        });
         // Log the full response result at a lower level to avoid cluttering logs, but still have it available for debugging when needed
-        if (isLogLevelEnabled("silly")) {
-          winston.silly(`[JSON-RPC Response Result] ID: ${id} Method: ${method}`, {
-            rpcResponse: {
-              id,
-              method,
-              result: JSON.stringify(result, (_, value) => (typeof value === "bigint" ? value.toString() : value)),
-            },
-          });
-        }
+        winston.silly(`[JSON-RPC Response Result] ID: ${id} Method: ${method}`, {
+          rpcResponse: {
+            id,
+            method,
+            result: JSON.stringify(result, (_, value) => (typeof value === "bigint" ? value.toString() : value)),
+          },
+        });
 
         return result;
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
