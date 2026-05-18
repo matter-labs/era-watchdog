@@ -88,7 +88,7 @@ export class SimpleTxFlow extends BaseFlow {
         fn: async ({ recordStepGas, recordStepGasPrice, recordStepGasCost }) => {
           let receipt;
           if (this.l2EthersProvider != null) {
-            receipt = unwrap(await this.l2EthersProvider.waitForTransaction(txResponse.hash, 1));
+            receipt = unwrap(await this.l2EthersProvider.waitForTransaction(txResponse.hash, 1, L2_EXECUTION_TIMEOUT));
           } else {
             receipt = unwrap(await txResponse.wait(1));
           }

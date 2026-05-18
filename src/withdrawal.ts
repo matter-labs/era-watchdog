@@ -67,7 +67,9 @@ export class WithdrawalFlow extends WithdrawalBaseFlow {
           recordStepGasPrice: (price: BigNumberish) => void;
           recordStepGasCost: (cost: BigNumberish) => void;
         }) => {
-          const receipt = unwrap(await this.l2EthersProvider.waitForTransaction(withdrawalHandle.hash));
+          const receipt = unwrap(
+            await this.l2EthersProvider.waitForTransaction(withdrawalHandle.hash, 1, L2_EXECUTION_TIMEOUT)
+          );
           recordStepGas(unwrap(receipt.gasUsed));
           recordStepGasPrice(unwrap(receipt.gasPrice));
           recordStepGasCost(BigInt(unwrap(receipt.gasUsed)) * BigInt(unwrap(receipt.gasPrice)));
