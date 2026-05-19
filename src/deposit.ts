@@ -143,7 +143,7 @@ export class DepositFlow extends DepositBaseFlow {
         stepName: STEPS.l2_execution,
         stepTimeoutMs: PRIORITY_OP_TIMEOUT,
         fn: async ({ recordStepGasPrice, recordStepGas, recordStepGasCost }) => {
-          const receipt = unwrap(await this.l2EthersProvider.waitForTransaction(l2TxHash, 1));
+          const receipt = unwrap(await this.l2EthersProvider.waitForTransaction(l2TxHash, 1, PRIORITY_OP_TIMEOUT));
           recordStepGasPrice(unwrap(receipt.gasPrice));
           recordStepGas(unwrap(receipt.gasUsed));
           recordStepGasCost(unwrap(receipt.gasUsed) * unwrap(receipt.gasPrice));
