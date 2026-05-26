@@ -166,32 +166,69 @@ const LoggingProviderMixing = <TBase extends Ctor<EthersJsonRpcProvider>>(Base: 
         return this.getTransactionReceipt(hash);
       }
 
-      const deadline = timeout != null ? Date.now() + timeout : null;
-      const pollMs = this.pollingInterval;
-
-      for (;;) {
-        try {
-          // Cheap inclusion probe: the raw JSON-RPC result is not parsed into ethers
-          // objects, so no per-log address checksumming (keccak256) happens while
-          // polling. The receipt is only formatted once, after it is confirmed.
-          const raw = (await this.send("eth_getTransactionReceipt", [hash])) as { blockNumber?: string } | null;
-          if (raw?.blockNumber != null) {
-            if (confirms <= 1) {
-              return this.getTransactionReceipt(hash);
-            }
-            const current = await this.getBlockNumber();
-            if (current - Number(raw.blockNumber) + 1 >= confirms) {
-              return this.getTransactionReceipt(hash);
-            }
-          }
-        } catch (error) {
-          winston.error("Error in waitForTransaction", error);
-        }
-
-        if (deadline != null && Date.now() >= deadline) {
+      let timer: null | NodeJS.Timeout = null;
+      let timedOut = false;
+      const failIfTimedOut = () => {
+        if (timedOut) {
           throw new Error("timeout");
         }
-        await new Promise((resolve) => setTimeout(resolve, pollMs));
+      };
+
+      const pollLoop = async (): Promise<null | TransactionReceipt> => {
+        const pollMs = this.pollingInterval;
+
+        for (;;) {
+          failIfTimedOut();
+          try {
+            // Cheap inclusion probe: the raw JSON-RPC result is not parsed into ethers
+            // objects, so no per-log address checksumming (keccak256) happens while
+            // polling. The receipt is only formatted once, after it is confirmed.
+            const raw = (await this.send("eth_getTransactionReceipt", [hash])) as { blockNumber?: string } | null;
+            failIfTimedOut();
+
+            if (raw?.blockNumber != null) {
+              if (confirms <= 1) {
+                const receipt = await this.getTransactionReceipt(hash);
+                failIfTimedOut();
+                return receipt;
+              }
+              const current = await this.getBlockNumber();
+              failIfTimedOut();
+              if (current - Number(raw.blockNumber) + 1 >= confirms) {
+                const receipt = await this.getTransactionReceipt(hash);
+                failIfTimedOut();
+                return receipt;
+              }
+            }
+          } catch (error) {
+            if (timedOut) {
+              throw error;
+            }
+            winston.error("Error in waitForTransaction", error);
+          }
+
+          await new Promise((resolve) => setTimeout(resolve, pollMs));
+        }
+      };
+
+      if (timeout == null) {
+        return pollLoop();
+      }
+
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timer = setTimeout(() => {
+          timedOut = true;
+          reject(new Error("timeout"));
+        }, timeout);
+      });
+
+      try {
+        return await Promise.race([pollLoop(), timeoutPromise]);
+      } finally {
+        timedOut = true;
+        if (timer) {
+          clearTimeout(timer);
+        }
       }
     }
   };
