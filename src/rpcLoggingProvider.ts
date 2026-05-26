@@ -99,7 +99,6 @@ const LoggingProviderMixing = <TBase extends Ctor<EthersJsonRpcProvider>>(Base: 
         rpcRequest: {
           id,
           method,
-          params: JSON.stringify(params, (_, value) => (typeof value === "bigint" ? value.toString() : value)),
         },
       });
 
@@ -123,14 +122,17 @@ const LoggingProviderMixing = <TBase extends Ctor<EthersJsonRpcProvider>>(Base: 
             method,
           },
         });
-        // Log the full response result at a lower level to avoid cluttering logs, but still have it available for debugging when needed
-        winston.silly(`[JSON-RPC Response Result] ID: ${id} Method: ${method}`, {
-          rpcResponse: {
-            id,
-            method,
-            result: JSON.stringify(result, (_, value) => (typeof value === "bigint" ? value.toString() : value)),
-          },
-        });
+        // Log the full response result at a lower level to avoid cluttering logs, but still have it available for debugging when needed.
+        // Guard with level check to avoid expensive JSON.stringify on every RPC call in production.
+        if (winston.config.npm.levels[winston.level] >= winston.config.npm.levels["silly"]) {
+          winston.silly(`[JSON-RPC Response Result] ID: ${id} Method: ${method}`, {
+            rpcResponse: {
+              id,
+              method,
+              result: JSON.stringify(result, (_, value) => (typeof value === "bigint" ? value.toString() : value)),
+            },
+          });
+        }
 
         return result;
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -165,19 +167,26 @@ const LoggingProviderMixing = <TBase extends Ctor<EthersJsonRpcProvider>>(Base: 
         let timer: null | NodeJS.Timeout = null;
 
         const listener = async (receipt: TransactionReceipt) => {
-          await this.once(hash, listener);
           try {
             if ((await receipt.confirmations()) >= confirms) {
               resolve(receipt);
-              await this.off(hash, listener);
               if (timer) {
                 clearTimeout(timer);
                 timer = null;
               }
               return;
             }
+            // Not enough confirmations yet — re-register for the next block
+            await this.once(hash, listener);
           } catch (error) {
             winston.error("Error in waitForTransaction", error);
+            // Clean up: reject the promise so callers don't hang,
+            // and clear the timer so nothing is left dangling.
+            if (timer) {
+              clearTimeout(timer);
+              timer = null;
+            }
+            reject(error);
           }
         };
 

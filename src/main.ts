@@ -43,7 +43,7 @@ const main = async () => {
     unwrap(process.env.CHAIN_RPC_URL),
     undefined,
     getProviderOptions({
-      pollingInterval: 100,
+      pollingInterval: 4000,
     })
   );
   const zkos_mode = process.env.ZKOS_MODE === "1";

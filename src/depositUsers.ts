@@ -173,7 +173,7 @@ export class DepositUserFlow extends DepositBaseFlow {
                 throw new Error(`Unexpected result ${result}`);
               }
             }
-            if (result === Status.OK) {
+            if (result === Status.OK || result === Status.SKIP) {
               break;
             }
             await timeoutPromise(DEPOSIT_RETRY_INTERVAL);

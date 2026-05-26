@@ -199,7 +199,7 @@ export class DepositFlow extends DepositBaseFlow {
             throw new Error(`Unreachable code branch: ${_exhaustiveCheck}`);
           }
         }
-        if (result == Status.OK) break;
+        if (result == Status.OK || result == Status.SKIP) break;
       }
       await nextExecutionWait;
     }
