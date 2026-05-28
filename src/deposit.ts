@@ -123,11 +123,16 @@ export class DepositFlow extends DepositBaseFlow {
       this.logger.info(`Tx (L1: ${depositHandle.hash}) sent on L1`);
 
       // wait for transaction
+      // NOTE: bypasses depositHandle.waitL1Commit — it calls
+      // provider.waitForTransaction WITHOUT a timeout, so on step timeout the
+      // poller would leak. Using ethers' native timeout cleans up the subscriber.
       const txReceipt = await this.metricRecorder.stepExecution({
         stepName: STEPS.l1_execution,
         stepTimeoutMs: 3 * MIN,
-        fn: async ({ recordStepGas, recordStepGasPrice, recordStepGasCost }) => {
-          const txReceipt = await depositHandle.waitL1Commit(1);
+        fn: async ({ recordStepGas, recordStepGasPrice, recordStepGasCost, timeoutMs }) => {
+          const txReceipt = unwrap(
+            await this.wallet._providerL1().waitForTransaction(depositHandle.hash, 1, timeoutMs)
+          );
           recordStepGas(unwrap(txReceipt?.gasUsed));
           recordStepGasPrice(unwrap(txReceipt?.gasPrice));
           recordStepGasCost(unwrap(txReceipt?.gasUsed) * unwrap(txReceipt?.gasPrice));
