@@ -85,12 +85,14 @@ export class SimpleTxFlow extends BaseFlow {
       await this.metricRecorder.stepExecution({
         stepName: "execution",
         stepTimeoutMs: L2_EXECUTION_TIMEOUT,
-        fn: async ({ recordStepGas, recordStepGasPrice, recordStepGasCost }) => {
+        fn: async ({ recordStepGas, recordStepGasPrice, recordStepGasCost, timeoutMs }) => {
           let receipt;
           if (this.l2EthersProvider != null) {
-            receipt = unwrap(await this.l2EthersProvider.waitForTransaction(txResponse.hash, 1, L2_EXECUTION_TIMEOUT));
+            receipt = unwrap(await this.l2EthersProvider.waitForTransaction(txResponse.hash, 1, timeoutMs));
           } else {
-            receipt = unwrap(await txResponse.wait(1));
+            // NOTE: bypasses txResponse.wait — it calls provider.waitForTransaction
+            // WITHOUT a timeout, so on step timeout the poller would leak.
+            receipt = unwrap(await this.provider.waitForTransaction(txResponse.hash, 1, timeoutMs));
           }
           recordStepGas(unwrap(receipt.gasUsed));
           recordStepGasPrice(unwrap(receipt.gasPrice));
