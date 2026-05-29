@@ -56,6 +56,10 @@ export const DEPOSIT_L1_GAS_PRICE_LIMIT_GWEI =
   BigInt(+(process.env.FLOW_DEPOSIT_L1_GAS_PRICE_LIMIT_GWEI ?? 1000)) * GWEI;
 
 export abstract class DepositBaseFlow extends BaseFlow {
+  /// Last OK execution per wallet key ("__any__" for the unfiltered call).
+  /// Lets repeat calls finding the same L1 tx skip the L2 wait + verbose logs.
+  private lastExecutionCache: Map<string, ExecutionResultKnown> = new Map();
+
   constructor(
     protected wallet: Wallet,
     protected sharedBridge: IL1SharedBridge,
@@ -110,6 +114,15 @@ export abstract class DepositBaseFlow extends BaseFlow {
     }
     const event = events[0];
 
+    const cacheKey = wallet ?? "__any__";
+    const cached = this.lastExecutionCache.get(cacheKey);
+    if (cached != null && cached.l1Receipt.hash === event.transactionHash) {
+      return {
+        ...cached,
+        secSinceL1Deposit: blockchainTime - cached.timestampL1,
+      };
+    }
+
     const timestampL1 = (await event.getBlock()).timestamp;
     const l1Receipt = await event.getTransactionReceipt();
     const l2TxHash = utils.getL2HashFromPriorityOp(l1Receipt, this.zkChainAddress);
@@ -147,12 +160,14 @@ export abstract class DepositBaseFlow extends BaseFlow {
       this.logger.info(
         `${event.transactionHash} executed successfully on l2: ${l2TxHash} at ${new Date(timestampL2 * 1000).toUTCString()} `
       );
-      return {
+      const okResult: ExecutionResultKnown = {
         ...l1Res,
         l2Receipt,
         timestampL2,
         status: StatusNoSkip.OK,
       };
+      this.lastExecutionCache.set(cacheKey, okResult);
+      return okResult;
     }
   }
 
