@@ -3263,7 +3263,7 @@ yocto-queue@^0.1.0:
   resolved "https://registry.npmjs.org/yocto-queue/-/yocto-queue-0.1.0.tgz"
   integrity sha512-rVksvsnNCdJ/ohGc6xgPwyN8eheCxsiLM8mxuE/t/mOVqJewPuO1miLpTHQiRgTKCLexL4MeAFVagts7HmNZ2Q==
 
-zksync-ethers@^6.15.1:
-  version "6.16.1"
-  resolved "https://registry.npmjs.org/zksync-ethers/-/zksync-ethers-6.16.1.tgz"
-  integrity sha512-D5fcs34P4b87+XMs7E+E4ZeASMPl0wAqWqp0RV/pztH14pVWrwS+C/rN63oIOD825GL+FmRmyZb4SrA1Ifff4A==
+zksync-ethers@^6.21.2:
+  version "6.21.2"
+  resolved "https://registry.yarnpkg.com/zksync-ethers/-/zksync-ethers-6.21.2.tgz#bfbe1eca8e1568fe0cea7b3c0251efeb740b9d26"
+  integrity sha512-YYDb/9lN334QggcLMCJhB50SGQ3QQNo2E5XSY1UgU8r8uDiJOqp89FTgZgXOIwUxamE+GoOpNfOYglT+TVh+tg==
