@@ -17,6 +17,7 @@ const PRE_V26_BRIDGES = process.env.PRE_V26_BRIDGES === "1";
 export class WithdrawalFinalizeFlow extends WithdrawalBaseFlow {
   private metricTimeSinceLastFinalizableWithdrawal: Gauge;
   private metricTimeSinceLastFinalizedBlock: Gauge;
+  private chainId!: BigNumberish;
 
   constructor(
     wallet: Wallet,
@@ -65,17 +66,22 @@ export class WithdrawalFinalizeFlow extends WithdrawalBaseFlow {
       if (!isAddressEq(sender, L2_BASE_TOKEN_ADDRESS)) {
         throw new Error(`Withdrawal ${withdrawalHash} is not a base token withdrawal`);
       }
-      // Determine the correct L1 bridge
 
-      const bridges = await this.wallet.getL1BridgeContracts();
+      if (await this.wallet.isWithdrawalFinalized(withdrawalHash)) {
+        this.logger.info(`Withdrawal ${withdrawalHash} is already finalized, skipping simulation`);
+        this.metricRecorder.recordFlowSkipped();
+        return Status.SKIP;
+      }
+
       if (PRE_V26_BRIDGES) {
-        // Instead of sending a transaction, just simulate it with a static call
+        // Legacy shared bridge
+        const bridges = await this.wallet.getL1BridgeContracts();
         await this.metricRecorder.stepExecution({
           stepName: STEPS.l1_simulation,
           stepTimeoutMs: 10 * SEC,
           fn: async ({ recordStepGas }) => {
             const gas = await bridges.shared.finalizeWithdrawal.estimateGas(
-              (await this.wallet._providerL2().getNetwork()).chainId as BigNumberish,
+              this.chainId,
               l1BatchNumber as BigNumberish,
               l2MessageIndex as BigNumberish,
               l2TxNumberInBlock as BigNumberish,
@@ -86,7 +92,23 @@ export class WithdrawalFinalizeFlow extends WithdrawalBaseFlow {
           },
         });
       } else {
-        throw new Error("V26 bridges are not supported");
+        const l1Nullifier = await this.wallet.getL1Nullifier();
+        await this.metricRecorder.stepExecution({
+          stepName: STEPS.l1_simulation,
+          stepTimeoutMs: 10 * SEC,
+          fn: async ({ recordStepGas }) => {
+            const gas = await l1Nullifier.finalizeDeposit.estimateGas({
+              chainId: this.chainId,
+              l2BatchNumber: l1BatchNumber as BigNumberish,
+              l2MessageIndex: l2MessageIndex as BigNumberish,
+              l2Sender: sender,
+              l2TxNumberInBatch: l2TxNumberInBlock as BigNumberish,
+              message,
+              merkleProof: proof,
+            });
+            recordStepGas(gas);
+          },
+        });
       }
 
       this.logger.info(`Finalization simulation for withdrawal ${withdrawalHash} successful`);
@@ -102,9 +124,7 @@ export class WithdrawalFinalizeFlow extends WithdrawalBaseFlow {
 
   public async run() {
     this.logger.info(`Starting withdrawal finalize flow with interval ${this.intervalMs / MIN} minutes`);
-    if (!PRE_V26_BRIDGES) {
-      throw new Error("V26 bridges are not supported");
-    }
+    this.chainId = (await this.wallet._providerL2().getNetwork()).chainId;
     while (true) {
       const nextExecutionWait = timeoutPromise(this.intervalMs);
 

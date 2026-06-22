@@ -133,7 +133,7 @@ Simulates (via `eth_gasEstimate`) finalization of latest withdrawal for L1 valid
 Options:
 - `FLOW_WITHDRAWAL_FINALIZE_ENABLE` -- set to `1` to enable
 - `FLOW_WITHDRAWAL_FINALIZE_INTERVAL` -- interval in ms (defaults to 15 minutes)
-- `PRE_V26_BRIDGES` -- set to `1` to use pre-v26 bridge interface (`withdrawalFinalize` requiring `legacySharedBridge` called through `BridgeHub` instead of `L1Nullifier` `depositFinalized` called directly). Setting to `0` is unsupported right now.
+- `PRE_V26_BRIDGES` -- set to `1` to simulate finalization through the legacy (pre-v26) shared bridge; defaults to `0`, which uses the `L1Nullifier.finalizeDeposit` path.
 
 ### RPC Test
 
