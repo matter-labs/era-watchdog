@@ -229,7 +229,8 @@ const main = async () => {
       new WithdrawalFinalizeFlow(
         walletForWithdrawals,
         false,
-        +unwrap(process.env.FLOW_WITHDRAWAL_FINALIZE_INTERVAL)
+        +unwrap(process.env.FLOW_WITHDRAWAL_FINALIZE_INTERVAL),
+        l1ProviderForWithdrawal
       ).run();
       enabledFlows++;
     }
