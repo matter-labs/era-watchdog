@@ -133,7 +133,24 @@ Simulates (via `eth_gasEstimate`) finalization of latest withdrawal for L1 valid
 Options:
 - `FLOW_WITHDRAWAL_FINALIZE_ENABLE` -- set to `1` to enable
 - `FLOW_WITHDRAWAL_FINALIZE_INTERVAL` -- interval in ms (defaults to 15 minutes)
-- `PRE_V26_BRIDGES` -- set to `1` to simulate finalization through the legacy (pre-v26) shared bridge; defaults to `0`, which uses the `L1Nullifier.finalizeDeposit` path.
+- `PRE_V26_BRIDGES` -- set to `1` to simulate finalization through the legacy (pre-v26) shared bridge; defaults to `0`, which selects the finalization path from the chain's withdrawal protocol.
+- `WITHDRAWAL_PROTOCOL` -- optional override for that protocol, either `legacy-withdrawal` or `interop-bundle`. Ignored when `PRE_V26_BRIDGES=1`.
+
+When `PRE_V26_BRIDGES` is unset, finalization goes through the `@matterlabs/zksync-js` SDK, which
+speaks both withdrawal protocols:
+
+| Protocol | Versions | Finalizes on | Status read from |
+| --- | --- | --- | --- |
+| `legacy-withdrawal` | v26 to v31 | `L1Nullifier.finalizeDeposit` | `L1Nullifier.isWithdrawalFinalized` |
+| `interop-bundle` | v32 and above | `L1InteropHandler.executeBundle` | `L1InteropHandler.bundleStatus` |
+
+v32 removed `finalizeDeposit`, `finalizeWithdrawal` and `isWithdrawalFinalized` outright, so a
+watchdog pointed at a v32 ecosystem on the legacy path fails with an opaque `execution reverted`.
+
+The SDK detects the protocol from the chain's own registered protocol version, falling back to a
+bytecode probe on L2. Both probes describe the L2, so neither sees an ecosystem whose **L1**
+contracts were upgraded to v32 while the chain is still registered as v31. Set
+`WITHDRAWAL_PROTOCOL=interop-bundle` to force the v32 path on such a chain.
 
 ### RPC Test
 

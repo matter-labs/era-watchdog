@@ -32,6 +32,7 @@
   },
   "dependencies": {
     "@google-cloud/kms": "^4.5.0",
+    "@matterlabs/zksync-js": "^0.0.23",
     "dotenv": "^16.4.5",
     "ethers": "6",
     "express": "^4.21.1",
