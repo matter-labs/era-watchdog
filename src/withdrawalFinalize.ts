@@ -12,7 +12,7 @@ import { Status } from "./flowMetric";
 import { SEC, MIN, unwrap, timeoutPromise } from "./utils";
 import { WithdrawalBaseFlow, STEPS } from "./withdrawalBase";
 
-import type { WithdrawalProtocol } from "@matterlabs/zksync-js/core";
+import type { WithdrawalFinalization, WithdrawalProtocol } from "@matterlabs/zksync-js/core";
 import type { FinalizationServices, WithdrawalProtocolService } from "@matterlabs/zksync-js/ethers";
 import type { AbstractProvider, BigNumberish } from "ethers";
 import type { Wallet } from "zksync-ethers";
@@ -92,6 +92,32 @@ export class WithdrawalFinalizeFlow extends WithdrawalBaseFlow {
   }
 
   /**
+   * Replace the SDK's transaction number in the batch with the receipt's `l1BatchTxIndex`.
+   *
+   * The SDK takes it from `receipt.transactionIndex`, which on Era is the index within the L2 block.
+   * As soon as an earlier L2 block of the same batch holds transactions, the two differ and L1 rejects
+   * the inclusion proof with `InvalidProof`. ZKsync OS receipts carry no `l1BatchTxIndex`, so the
+   * SDK's value is kept there.
+   */
+  private async withL1BatchTxIndex(
+    withdrawalHash: string,
+    finalization: WithdrawalFinalization
+  ): Promise<WithdrawalFinalization> {
+    const receipt = await this.wallet._providerL2().getTransactionReceipt(withdrawalHash);
+    const txNumberInBatch = receipt?.l1BatchTxIndex;
+    if (txNumberInBatch == null) return finalization;
+
+    if (finalization.protocol === "legacy-withdrawal") {
+      return { ...finalization, params: { ...finalization.params, l2TxNumberInBatch: txNumberInBatch } };
+    }
+    const { proof } = finalization.params;
+    return {
+      ...finalization,
+      params: { ...finalization.params, proof: { ...proof, message: { ...proof.message, txNumberInBatch } } },
+    };
+  }
+
+  /**
    * Simulate finalization on the protocol the chain actually speaks.
    *
    * v31 and below finalize on `L1Nullifier.finalizeDeposit`; v32 and above replaced that with
@@ -102,10 +128,13 @@ export class WithdrawalFinalizeFlow extends WithdrawalBaseFlow {
     const services = unwrap(this.finalizationServices);
     await this.resolveProtocol();
 
-    const { finalization } = await this.metricRecorder.stepExecution({
+    const finalization = await this.metricRecorder.stepExecution({
       stepName: STEPS.get_finalization_params,
       stepTimeoutMs: 10 * SEC,
-      fn: async () => services.fetchFinalization(withdrawalHash as `0x${string}`),
+      fn: async () => {
+        const { finalization } = await services.fetchFinalization(withdrawalHash as `0x${string}`);
+        return this.withL1BatchTxIndex(withdrawalHash, finalization);
+      },
     });
 
     if (await services.isWithdrawalFinalized(finalization)) {
