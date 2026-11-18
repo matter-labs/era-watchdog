@@ -7,6 +7,20 @@ import type { KeyManagementServiceClient } from "@google-cloud/kms";
 import type { TypedDataDomain, TypedDataField } from "ethers";
 
 /**
+ * State shared by a signer and every copy made from it with `connect()`.
+ *
+ * zksync-ethers calls `wallet._signerL1()` (→ `connect()`) inside most L1
+ * helpers, so a single flow iteration can create several signers. Sharing
+ * the KMS client and the resolved key keeps that at one gRPC client and one
+ * `getPublicKey` call per process instead of one per `connect()`.
+ */
+interface SharedKmsState {
+  client: Promise<KeyManagementServiceClient> | null;
+  address: string | null;
+  publicKey: string | null;
+}
+
+/**
  * An ethers v6 Signer backed by Google Cloud KMS.
  *
  * Expects a KMS key with algorithm EC_SIGN_SECP256K1_SHA256.
@@ -17,9 +31,7 @@ import type { TypedDataDomain, TypedDataField } from "ethers";
  *   projects/<project>/locations/<location>/keyRings/<ring>/cryptoKeys/<key>/cryptoKeyVersions/<version>
  */
 export class GcpKmsSigner extends ethers.AbstractSigner {
-  private kmsClient!: KeyManagementServiceClient;
-  private cachedAddress: string | null = null;
-  private cachedPublicKey: string | null = null;
+  private readonly shared: SharedKmsState;
 
   /**
    * Ethereum address derived from the KMS public key.
@@ -27,41 +39,55 @@ export class GcpKmsSigner extends ethers.AbstractSigner {
    * (the wallet factory calls it eagerly on creation).
    */
   get address(): string {
-    if (!this.cachedAddress) {
+    if (!this.shared.address) {
       throw new Error("GcpKmsSigner address not yet resolved — call getAddress() first");
     }
-    return this.cachedAddress;
+    return this.shared.address;
   }
 
+  /**
+   * @param shared Internal: passed by `connect()` so the copy reuses this
+   * signer's KMS client and resolved key. Leave unset elsewhere.
+   */
   constructor(
     private readonly kmsResourceName: string,
-    provider?: ethers.Provider | null
+    provider?: ethers.Provider | null,
+    shared?: SharedKmsState
   ) {
     super(provider);
+    this.shared = shared ?? { client: null, address: null, publicKey: null };
   }
 
   /**
    * Lazily initialise the KMS client so the `@google-cloud/kms` import
    * is deferred until first use (keeps startup fast when using a hex key).
+   * The client is created once and shared with every `connect()` copy.
    */
-  private async getKmsClient(): Promise<KeyManagementServiceClient> {
-    if (!this.kmsClient) {
-      // Dynamic import so the package is only loaded for KMS wallets.
-      const { KeyManagementServiceClient } = await import("@google-cloud/kms");
-      this.kmsClient = new KeyManagementServiceClient();
-      winston.info(`GCP KMS signer initialised for ${this.kmsResourceName}`);
+  private getKmsClient(): Promise<KeyManagementServiceClient> {
+    if (!this.shared.client) {
+      this.shared.client = (async () => {
+        // Dynamic import so the package is only loaded for KMS wallets.
+        const { KeyManagementServiceClient } = await import("@google-cloud/kms");
+        const client = new KeyManagementServiceClient();
+        winston.info(`GCP KMS signer initialised for ${this.kmsResourceName}`);
+        return client;
+      })().catch((e) => {
+        // Don't cache a failed initialisation; let the next call retry.
+        this.shared.client = null;
+        throw e;
+      });
     }
-    return this.kmsClient;
+    return this.shared.client;
   }
 
   // ---- public key / address --------------------------------------------------
 
   /**
    * Fetches the uncompressed public key from KMS and derives the Ethereum address.
-   * The result is cached for the lifetime of this signer.
+   * The result is cached and shared with every `connect()` copy.
    */
   async getAddress(): Promise<string> {
-    if (this.cachedAddress) return this.cachedAddress;
+    if (this.shared.address) return this.shared.address;
 
     const client = await this.getKmsClient();
     const [publicKeyResponse] = await client.getPublicKey({
@@ -73,10 +99,10 @@ export class GcpKmsSigner extends ethers.AbstractSigner {
     }
 
     const uncompressedKey = deriveUncompressedPublicKeyFromPem(publicKeyResponse.pem);
-    this.cachedPublicKey = ethers.hexlify(uncompressedKey);
-    this.cachedAddress = ethers.computeAddress(this.cachedPublicKey);
-    winston.info(`GCP KMS wallet address: ${this.cachedAddress}`);
-    return this.cachedAddress;
+    this.shared.publicKey = ethers.hexlify(uncompressedKey);
+    this.shared.address = ethers.computeAddress(this.shared.publicKey);
+    winston.info(`GCP KMS wallet address: ${this.shared.address}`);
+    return this.shared.address;
   }
 
   // ---- signing ---------------------------------------------------------------
@@ -151,7 +177,7 @@ export class GcpKmsSigner extends ethers.AbstractSigner {
   // ---- helpers ---------------------------------------------------------------
 
   connect(provider: ethers.Provider): GcpKmsSigner {
-    return new GcpKmsSigner(this.kmsResourceName, provider);
+    return new GcpKmsSigner(this.kmsResourceName, provider, this.shared);
   }
 }
 
